@@ -140,12 +140,22 @@
 
     // Paddle entity
     class Paddle {
-      constructor() { this.width = 120; this.height = 18; this.x = (WIDTH - 120) / 2; this.y = HEIGHT - 40; this.speed = 8; this.dx = 0; }
+  constructor() { this.width = 120; this.height = 18; this.x = (WIDTH - 120) / 2; this.y = HEIGHT - 40; this.speed = 8; this.dx = 0; this.expandActive = false; this.shrinkActive = false; }
       clamp() { this.x = Math.max(0, Math.min(WIDTH - this.width, this.x)); }
       update(leftPressed, rightPressed) {
         this.dx = 0; if (leftPressed) this.dx -= this.speed; if (rightPressed) this.dx += this.speed; this.x += this.dx; this.clamp();
       }
-  draw(ctx, lowGraphics) { ctx.save(); ctx.fillStyle = '#09f'; if (!lowGraphics) { ctx.shadowColor = '#00f8'; ctx.shadowBlur = 12; } ctx.fillRect(this.x, this.y, this.width, this.height); ctx.restore(); }
+  draw(ctx, lowGraphics) {
+    ctx.save();
+    let color = '#09f'; let shadow = '#00f8';
+    if (this.expandActive && !this.shrinkActive) { color = '#2ecc71'; shadow = '#2ecc7188'; }
+    else if (this.shrinkActive && !this.expandActive) { color = '#e74c3c'; shadow = '#e74c3c88'; }
+    else if (this.expandActive && this.shrinkActive) { color = '#f1c40f'; shadow = '#f1c40f88'; }
+    ctx.fillStyle = color;
+    if (!lowGraphics) { ctx.shadowColor = shadow; ctx.shadowBlur = 12; }
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+    ctx.restore();
+  }
     }
 
     // Ball entity
@@ -678,6 +688,9 @@
             this.paddle.x = center - this.paddle.width / 2;
             this.paddle.clamp();
           }
+          // Visual flags for paddle rendering
+          this.paddle.expandActive = this.effectTimers.expand > 0;
+          this.paddle.shrinkActive = this.effectTimers.shrink > 0;
           // Apply ball slow effect
           const desiredSpeed = this.normalBallSpeed * (this.effectTimers.slow > 0 ? 0.7 : 1);
           for (const b of this.balls) { if (Math.abs(b.speed - desiredSpeed) > 0.5) { b.speed = desiredSpeed; b.enforceSpeed(); } }
