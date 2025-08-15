@@ -49,6 +49,7 @@
     PADDLE_EXPAND: 'paddleExpand',
     PADDLE_SHRINK: 'paddleShrink',
     SLOW_BALL: 'slowBall',
+  FAST_BALL: 'fastBall',
     STICKY: 'stickyPaddle',
   };
   const POWERUP_COLORS = {
@@ -57,6 +58,7 @@
     [POWERUP_TYPES.PADDLE_EXPAND]: '#4cd137',
     [POWERUP_TYPES.PADDLE_SHRINK]: '#e84118',
     [POWERUP_TYPES.SLOW_BALL]: '#00a8ff',
+  [POWERUP_TYPES.FAST_BALL]: '#ff6b6b',
     [POWERUP_TYPES.STICKY]: '#fbc531',
   };
 
@@ -186,7 +188,16 @@
         // Bottom -> life lost
         if (this.y - this.radius > HEIGHT) { onLifeLost(); }
       }
-  draw(ctx, lowGraphics) { ctx.save(); ctx.fillStyle = '#ffcc00'; if (!lowGraphics) { ctx.shadowColor = '#ffc80080'; ctx.shadowBlur = 10; } ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  draw(ctx, lowGraphics, visual = undefined) {
+        ctx.save();
+        let fill = '#ffcc00'; let shadow = '#ffc80080';
+        if (visual?.fast) { fill = '#ff6b6b'; shadow = '#ff6b6b80'; }
+        else if (visual?.slow) { fill = '#00a8ff'; shadow = '#00a8ff80'; }
+        ctx.fillStyle = fill;
+        if (!lowGraphics) { ctx.shadowColor = shadow; ctx.shadowBlur = 10; }
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
     }
 
     // Brick field module
@@ -290,6 +301,7 @@
           case POWERUP_TYPES.PADDLE_EXPAND: letter = 'E'; break;
           case POWERUP_TYPES.PADDLE_SHRINK: letter = 'S'; break;
           case POWERUP_TYPES.SLOW_BALL: letter = 'C'; break; // clock
+          case POWERUP_TYPES.FAST_BALL: letter = 'F'; break;
           case POWERUP_TYPES.STICKY: letter = 'G'; break; // glue
         }
         ctx.fillText(letter, cx, cy + 1);
@@ -605,7 +617,7 @@
   this.paddle = new Paddle(); this.ball = new Ball(); this.balls = [this.ball]; this.bricks = new BrickField(this.level);
   // Power-ups and effects
   this.powerUps = [];
-  this.effectTimers = { expand: 0, shrink: 0, slow: 0, sticky: 0 };
+  this.effectTimers = { expand: 0, shrink: 0, slow: 0, fast: 0, sticky: 0 };
   this.basePaddleWidth = this.paddle.width;
   this.normalBallSpeed = this.ball.speed;
         this.resizeCanvas = this.resizeCanvas.bind(this); this.onVisibility = this.onVisibility.bind(this);
@@ -676,6 +688,7 @@
           if (this.effectTimers.expand > 0) this.effectTimers.expand = Math.max(0, this.effectTimers.expand - dt);
           if (this.effectTimers.shrink > 0) this.effectTimers.shrink = Math.max(0, this.effectTimers.shrink - dt);
           if (this.effectTimers.slow > 0) this.effectTimers.slow = Math.max(0, this.effectTimers.slow - dt);
+          if (this.effectTimers.fast > 0) this.effectTimers.fast = Math.max(0, this.effectTimers.fast - dt);
           if (this.effectTimers.sticky > 0) this.effectTimers.sticky = Math.max(0, this.effectTimers.sticky - dt);
           // Apply paddle width effect (keep center where possible)
           let factor = 1;
@@ -692,7 +705,10 @@
           this.paddle.expandActive = this.effectTimers.expand > 0;
           this.paddle.shrinkActive = this.effectTimers.shrink > 0;
           // Apply ball slow effect
-          const desiredSpeed = this.normalBallSpeed * (this.effectTimers.slow > 0 ? 0.7 : 1);
+          let speedScale = 1;
+          if (this.effectTimers.slow > 0) speedScale *= 0.7;
+          if (this.effectTimers.fast > 0) speedScale *= 4.0;
+          const desiredSpeed = this.normalBallSpeed * speedScale;
           for (const b of this.balls) { if (Math.abs(b.speed - desiredSpeed) > 0.5) { b.speed = desiredSpeed; b.enforceSpeed(); } }
           this.paddle.update(this.input.leftPressed, this.input.rightPressed);
           for (const b of this.balls) { if (!b.launched) { b.x = this.paddle.x + this.paddle.width / 2; b.y = this.paddle.y - b.radius; } }
@@ -711,10 +727,11 @@
               if (Math.random() < spawnChance) {
                 let r = Math.random(); let type = POWERUP_TYPES.STICKY;
                 if (r < 0.15) type = POWERUP_TYPES.EXTRA_LIFE;
-                else if (r < 0.35) type = POWERUP_TYPES.MULTI_BALL;
-                else if (r < 0.55) type = POWERUP_TYPES.STICKY;
-                else if (r < 0.75) type = POWERUP_TYPES.SLOW_BALL;
-                else if (r < 0.88) type = POWERUP_TYPES.PADDLE_EXPAND;
+                else if (r < 0.30) type = POWERUP_TYPES.FAST_BALL;
+                else if (r < 0.45) type = POWERUP_TYPES.MULTI_BALL;
+                else if (r < 0.60) type = POWERUP_TYPES.STICKY;
+                else if (r < 0.78) type = POWERUP_TYPES.SLOW_BALL;
+                else if (r < 0.90) type = POWERUP_TYPES.PADDLE_EXPAND;
                 else type = POWERUP_TYPES.PADDLE_SHRINK;
                 this.powerUps.push(new PowerUp(hit.cx, hit.cy, type));
               }
@@ -778,6 +795,9 @@
           case POWERUP_TYPES.SLOW_BALL:
             this.effectTimers.slow = Math.max(this.effectTimers.slow, 8);
             break;
+          case POWERUP_TYPES.FAST_BALL:
+            this.effectTimers.fast = Math.max(this.effectTimers.fast, 5);
+            break;
           case POWERUP_TYPES.STICKY:
             this.effectTimers.sticky = Math.max(this.effectTimers.sticky, 8);
             break;
@@ -809,7 +829,7 @@
     for (const pu of this.powerUps) pu.draw(this.ctx, this.renderer.lowGraphics);
   }
   this.paddle.draw(this.ctx, this.renderer.lowGraphics);
-  for (const b of this.balls) b.draw(this.ctx, this.renderer.lowGraphics);
+  for (const b of this.balls) b.draw(this.ctx, this.renderer.lowGraphics, { fast: this.effectTimers.fast > 0, slow: this.effectTimers.slow > 0 });
         this.renderer.endWorld();
         // Compute a flashing alpha [0..1] for the high score effect
         const flashAlpha = this.highScoreFlash > 0 ? 0.5 + 0.5 * Math.sin((2 * Math.PI) * (performance.now() / 200)) : 0;
