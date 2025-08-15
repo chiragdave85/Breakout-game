@@ -206,8 +206,13 @@
       }
       endWorld() { this.ctx.restore(); }
       drawBackground() { const ctx = this.ctx; ctx.fillStyle = '#111'; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
-      drawHUD(score, lives, level, highScore, highFlashAlpha = 0) {
+      drawHUD(score, lives, level, highScore, highFlashAlpha = 0, gameState = GameState.PLAYING) {
         const ctx = this.ctx; ctx.save(); ctx.textBaseline = 'top';
+        // Optional small title during gameplay states (not on START)
+        if (gameState !== GameState.START) {
+          ctx.textAlign = 'center'; ctx.font = '16px monospace'; ctx.fillStyle = '#fff';
+          ctx.fillText('Breakout', WIDTH / 2, 6);
+        }
         // Left block: Score and High Score stacked
         ctx.textAlign = 'left';
         ctx.font = '20px monospace'; ctx.fillStyle = '#fff'; ctx.fillText(`Score: ${score}`, 10, 10);
@@ -221,8 +226,8 @@
           ctx.fillStyle = '#ddd';
         }
         ctx.fillText(`High: ${highScore}`, 10, 34);
-        // Center: Lives
-        ctx.textAlign = 'center'; ctx.font = '20px monospace'; ctx.fillStyle = '#fff'; ctx.fillText(`Lives: ${lives}`, WIDTH / 2, 10);
+        // Center: Lives (slightly lower to make room for title)
+        ctx.textAlign = 'center'; ctx.font = '20px monospace'; ctx.fillStyle = '#fff'; ctx.fillText(`Lives: ${lives}`, WIDTH / 2, 28);
         // Right: Level
         ctx.textAlign = 'right'; ctx.fillText(`Level: ${level}`, WIDTH - 10, 10);
         ctx.restore();
@@ -231,6 +236,7 @@
       drawOverlay(gameState, paused) {
         const ctx = this.ctx; ctx.save(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const cx = WIDTH / 2; const cy = HEIGHT / 2;
         if (gameState === GameState.START) {
+          ctx.font = '48px monospace'; ctx.fillText('Breakout', cx, cy - 40);
           ctx.font = '28px monospace'; ctx.fillText('Press Space to Start', cx, cy);
           ctx.font = '16px monospace'; ctx.fillText('Controls: Arrow keys or Mouse/Touch | P: Pause | M: Mute | Shift+M: Reset High', cx, cy + 30);
         }
@@ -371,7 +377,7 @@
         this.renderer.endWorld();
         // Compute a flashing alpha [0..1] for the high score effect
         const flashAlpha = this.highScoreFlash > 0 ? 0.5 + 0.5 * Math.sin((2 * Math.PI) * (performance.now() / 200)) : 0;
-        this.renderer.drawHUD(this.score, this.lives, this.level, this.highScores.value, flashAlpha);
+  this.renderer.drawHUD(this.score, this.lives, this.level, this.highScores.value, flashAlpha, this.state);
         this.renderer.drawFPS();
         this.renderer.drawOverlay(this.state, this.isPaused());
       }
