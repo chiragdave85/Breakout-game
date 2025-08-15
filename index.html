@@ -275,39 +275,41 @@
         ctx.restore();
       }
 
+      // Build a clean, symmetric heart path inside the box at (x,y) with size x size.
+      buildHeartPath(ctx, x, y, size) {
+        const w = size, h = size;
+        // Control: top lobes centers and radius for smooth arcs
+        const r = w * 0.26;
+        const cxL = x + w * 0.35, cyL = y + h * 0.35;
+        const cxR = x + w * 0.65, cyR = y + h * 0.35;
+        const tipX = x + w * 0.5, tipY = y + h * 0.98;
+        ctx.beginPath();
+        // Start at bottom tip
+        ctx.moveTo(tipX, tipY);
+        // Left edge up to left arc start
+        ctx.bezierCurveTo(x + w * 0.12, y + h * 0.82, x + w * 0.02, y + h * 0.55, x + w * 0.22, y + h * 0.38);
+        // Left lobe
+        ctx.arc(cxL, cyL, r, Math.PI * 0.9, Math.PI * 2.1, false);
+        // Right lobe
+        ctx.arc(cxR, cyR, r, Math.PI, 0, false);
+        // Right edge back to tip
+        ctx.bezierCurveTo(x + w * 0.98, y + h * 0.55, x + w * 0.88, y + h * 0.82, tipX, tipY);
+        ctx.closePath();
+      }
       // Draw a filled heart with top-left at (x, y), roughly size x size box
       drawHeart(x, y, size, color = HEART_COLOR, opts = undefined) {
         const ctx = this.ctx;
         ctx.save();
         const scale = opts?.scale || 1;
         const alpha = opts?.alpha ?? 1;
-        // Translate to center for scaling
+        // Scale around heart center so pop animation stays centered
         const cx = x + size / 2, cy = y + size / 2;
         ctx.translate(cx, cy);
         ctx.scale(scale, scale);
-        ctx.translate(-size / 2, -size / 2);
+        ctx.translate(-cx, -cy);
         ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         ctx.fillStyle = color;
-        ctx.beginPath();
-        const w = size, h = size;
-        const topCurveHeight = h * 0.3;
-        // Start at bottom tip
-        ctx.moveTo(0 + w / 2, 0 + h);
-        // Left side
-        ctx.bezierCurveTo(0 + w / 2 - w * 0.25, 0 + h - h * 0.1,
-                          0, 0 + h * 0.6,
-                          0, 0 + topCurveHeight);
-        ctx.bezierCurveTo(0, 0,
-                          0 + w * 0.25, 0,
-                          0 + w * 0.25, 0 + topCurveHeight);
-        // Right side
-        ctx.bezierCurveTo(0 + w * 0.25, 0,
-                          0 + w * 0.75, 0,
-                          0 + w * 0.75, 0 + topCurveHeight);
-        ctx.bezierCurveTo(0 + w * 0.75, 0 + h * 0.6,
-                          0 + w / 2 + w * 0.25, 0 + h - h * 0.1,
-                          0 + w / 2, 0 + h);
-        ctx.closePath();
+        this.buildHeartPath(ctx, x, y, size);
         ctx.fill();
         ctx.restore();
       }
@@ -316,23 +318,9 @@
         ctx.save();
         ctx.strokeStyle = color;
         ctx.lineWidth = Math.max(1, Math.round(size * 0.12));
-        ctx.beginPath();
-        const w = size, h = size;
-        const topCurveHeight = h * 0.3;
-        ctx.moveTo(x + w / 2, y + h);
-        ctx.bezierCurveTo(x + w / 2 - w * 0.25, y + h - h * 0.1,
-                          x, y + h * 0.6,
-                          x, y + topCurveHeight);
-        ctx.bezierCurveTo(x, y,
-                          x + w * 0.25, y,
-                          x + w * 0.25, y + topCurveHeight);
-        ctx.bezierCurveTo(x + w * 0.25, y,
-                          x + w * 0.75, y,
-                          x + w * 0.75, y + topCurveHeight);
-        ctx.bezierCurveTo(x + w * 0.75, y + h * 0.6,
-                          x + w / 2 + w * 0.25, y + h - h * 0.1,
-                          x + w / 2, y + h);
-        ctx.closePath();
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        this.buildHeartPath(ctx, x, y, size);
         ctx.stroke();
         ctx.restore();
       }
