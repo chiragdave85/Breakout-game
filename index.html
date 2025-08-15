@@ -260,7 +260,18 @@
           ctx.restore();
           ctx.font = '16px monospace'; ctx.fillText('Controls: Arrow keys or Mouse/Touch | P: Pause | M: Mute | Shift+M: Reset High', cx, cy + 30);
         }
-        else if (gameState === GameState.LEVEL_CLEARED) { ctx.font = '32px monospace'; ctx.fillText('Level Cleared!', cx, cy - 20); ctx.font = '24px monospace'; ctx.fillText('Press Space for Next Level', cx, cy + 20); }
+        else if (gameState === GameState.LEVEL_CLEARED) {
+          // Pulsing title
+          ctx.save();
+          const t = performance.now();
+          const pulse = 0.5 + 0.5 * Math.sin(t / 400);
+          ctx.globalAlpha = 0.6 + 0.4 * pulse;
+          ctx.font = '32px monospace';
+          ctx.fillText('Level Cleared!', cx, cy - 20);
+          ctx.restore();
+          ctx.font = '24px monospace';
+          ctx.fillText('Press Space for Next Level', cx, cy + 20);
+        }
         else if (gameState === GameState.GAME_OVER) { ctx.font = '32px monospace'; ctx.fillText('Game Over!', cx, cy - 20); ctx.font = '24px monospace'; ctx.fillText('Press Space to Restart', cx, cy + 20); }
         if (paused && gameState === GameState.PLAYING) { ctx.font = '32px monospace'; ctx.fillText('Paused', cx, cy + 60); }
         ctx.restore();
