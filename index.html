@@ -103,6 +103,19 @@
       }
     }
 
+    // High score manager
+    class HighScoreManager {
+      constructor(key = 'breakout_high_score') { this.key = key; this.value = 0; this.load(); }
+      load() {
+        try { const raw = localStorage.getItem(this.key); this.value = raw ? Math.max(0, parseInt(raw, 10) || 0) : 0; }
+        catch { this.value = 0; }
+      }
+      save() {
+        try { localStorage.setItem(this.key, String(this.value)); } catch { /* ignore */ }
+      }
+      setIfHigher(score) { if (score > this.value) { this.value = score; this.save(); return true; } return false; }
+    }
+
     // Paddle entity
     class Paddle {
       constructor() { this.width = 120; this.height = 18; this.x = (WIDTH - 120) / 2; this.y = HEIGHT - 40; this.speed = 8; this.dx = 0; }
@@ -193,11 +206,34 @@
       }
       endWorld() { this.ctx.restore(); }
       drawBackground() { const ctx = this.ctx; ctx.fillStyle = '#111'; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
-      drawHUD(score, lives, level) { const ctx = this.ctx; ctx.save(); ctx.font = '20px monospace'; ctx.fillStyle = '#fff'; ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.fillText(`Score: ${score}`, 10, 10); ctx.textAlign = 'center'; ctx.fillText(`Lives: ${lives}`, WIDTH / 2, 10); ctx.textAlign = 'right'; ctx.fillText(`Level: ${level}`, WIDTH - 10, 10); ctx.restore(); }
+      drawHUD(score, lives, level, highScore, highFlashAlpha = 0) {
+        const ctx = this.ctx; ctx.save(); ctx.textBaseline = 'top';
+        // Left block: Score and High Score stacked
+        ctx.textAlign = 'left';
+        ctx.font = '20px monospace'; ctx.fillStyle = '#fff'; ctx.fillText(`Score: ${score}`, 10, 10);
+        ctx.font = '14px monospace';
+        if (highFlashAlpha > 0) {
+          // Flash between gold and white
+          const a = Math.max(0, Math.min(1, highFlashAlpha));
+          const blink = a; // already shaped externally
+          ctx.fillStyle = blink > 0.5 ? '#ffd700' : '#fff';
+        } else {
+          ctx.fillStyle = '#ddd';
+        }
+        ctx.fillText(`High: ${highScore}`, 10, 34);
+        // Center: Lives
+        ctx.textAlign = 'center'; ctx.font = '20px monospace'; ctx.fillStyle = '#fff'; ctx.fillText(`Lives: ${lives}`, WIDTH / 2, 10);
+        // Right: Level
+        ctx.textAlign = 'right'; ctx.fillText(`Level: ${level}`, WIDTH - 10, 10);
+        ctx.restore();
+      }
       drawFPS() { const ctx = this.ctx; ctx.save(); ctx.font = '16px monospace'; ctx.fillStyle = '#0f0'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left'; ctx.fillText(`FPS: ${this.fps}`, 10, HEIGHT - 10); ctx.restore(); }
       drawOverlay(gameState, paused) {
         const ctx = this.ctx; ctx.save(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const cx = WIDTH / 2; const cy = HEIGHT / 2;
-        if (gameState === GameState.START) { ctx.font = '28px monospace'; ctx.fillText('Press Space to Start', cx, cy); }
+        if (gameState === GameState.START) {
+          ctx.font = '28px monospace'; ctx.fillText('Press Space to Start', cx, cy);
+          ctx.font = '16px monospace'; ctx.fillText('Controls: Arrow keys or Mouse/Touch | P: Pause | M: Mute', cx, cy + 30);
+        }
         else if (gameState === GameState.LEVEL_CLEARED) { ctx.font = '32px monospace'; ctx.fillText('Level Cleared!', cx, cy - 20); ctx.font = '24px monospace'; ctx.fillText('Press Space for Next Level', cx, cy + 20); }
         else if (gameState === GameState.GAME_OVER) { ctx.font = '32px monospace'; ctx.fillText('Game Over!', cx, cy - 20); ctx.font = '24px monospace'; ctx.fillText('Press Space to Restart', cx, cy + 20); }
         if (paused && gameState === GameState.PLAYING) { ctx.font = '32px monospace'; ctx.fillText('Paused', cx, cy + 60); }
@@ -247,6 +283,7 @@
         this.canvas = canvas; this.ctx = ctx; this.currentScale = 1; this.frames = 0; this.lastFpsUpdate = performance.now(); this.lastTick = performance.now();
         this.state = GameState.START; this.score = 0; this.lives = 3; this.level = 1; this.paused = false; this.autoPaused = false;
         this.audio = new AudioManager(); this.renderer = new Renderer(this.ctx); this.particles = new Particles();
+        this.highScores = new HighScoreManager(); this.highScoreFlash = 0; // seconds remaining for flash
         this.paddle = new Paddle(); this.ball = new Ball(); this.bricks = new BrickField(this.level);
         this.resizeCanvas = this.resizeCanvas.bind(this); this.onVisibility = this.onVisibility.bind(this);
         window.addEventListener('resize', this.resizeCanvas); document.addEventListener('visibilitychange', this.onVisibility); this.resizeCanvas();
@@ -262,7 +299,7 @@
           onPointerInteract: () => this.audio.ensure(),
         });
         this.ball.resetOnPaddle(this.paddle);
-        requestAnimationFrame((t) => this.loop(t));
+  requestAnimationFrame((t) => this.loop(t));
       }
       // Scaling
       resizeCanvas() {
@@ -299,10 +336,21 @@
         if (!this.isPaused() && this.state === GameState.PLAYING) {
           this.ball.update(dt, this.paddle, this.audio, () => this.onLifeLost());
           const hit = this.bricks.handleCollisions(this.ball);
-          if (hit.hit) { this.audio.playBrickHit(); this.score += hit.scoreDelta * Math.max(1, this.level); this.particles.spawnBrickParticles(hit.cx, hit.cy, hit.color); }
+          if (hit.hit) {
+            this.audio.playBrickHit();
+            this.score += hit.scoreDelta * Math.max(1, this.level);
+            if (this.highScores.setIfHigher(this.score)) {
+              // Trigger a brief flash effect for new high score
+              this.highScoreFlash = 2.5; // seconds
+            }
+            this.particles.spawnBrickParticles(hit.cx, hit.cy, hit.color);
+          }
           if (this.bricks.allCleared()) { this.ball.resetOnPaddle(this.paddle); this.state = GameState.LEVEL_CLEARED; }
         }
-        if (!this.isPaused()) this.particles.update(dt);
+        if (!this.isPaused()) {
+          this.particles.update(dt);
+          if (this.highScoreFlash > 0) this.highScoreFlash = Math.max(0, this.highScoreFlash - dt);
+        }
       }
       onLifeLost() {
         this.lives -= 1; this.audio.playLifeLost(); if (this.lives <= 0) { this.ball.resetOnPaddle(this.paddle); this.state = GameState.GAME_OVER; } else { this.ball.resetOnPaddle(this.paddle); }
@@ -316,7 +364,9 @@
         this.paddle.draw(this.ctx);
         this.ball.draw(this.ctx);
         this.renderer.endWorld();
-        this.renderer.drawHUD(this.score, this.lives, this.level);
+        // Compute a flashing alpha [0..1] for the high score effect
+        const flashAlpha = this.highScoreFlash > 0 ? 0.5 + 0.5 * Math.sin((2 * Math.PI) * (performance.now() / 200)) : 0;
+        this.renderer.drawHUD(this.score, this.lives, this.level, this.highScores.value, flashAlpha);
         this.renderer.drawFPS();
         this.renderer.drawOverlay(this.state, this.isPaused());
       }
