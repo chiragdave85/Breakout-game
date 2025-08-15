@@ -210,8 +210,13 @@
         const ctx = this.ctx; ctx.save(); ctx.textBaseline = 'top';
         // Optional small title during gameplay states (not on START)
         if (gameState !== GameState.START) {
-          ctx.textAlign = 'center'; ctx.font = '16px monospace'; ctx.fillStyle = '#fff';
+          ctx.textAlign = 'center'; ctx.font = '16px monospace';
+          ctx.save();
+          ctx.shadowColor = '#ffffff88';
+          ctx.shadowBlur = 8;
+          ctx.fillStyle = '#fff';
           ctx.fillText('Breakout', WIDTH / 2, 6);
+          ctx.restore();
         }
         // Left block: Score and High Score stacked
         ctx.textAlign = 'left';
@@ -236,7 +241,12 @@
       drawOverlay(gameState, paused) {
         const ctx = this.ctx; ctx.save(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const cx = WIDTH / 2; const cy = HEIGHT / 2;
         if (gameState === GameState.START) {
-          ctx.font = '48px monospace'; ctx.fillText('Breakout', cx, cy - 40);
+          ctx.save();
+          ctx.shadowColor = '#ffffffaa';
+          ctx.shadowBlur = 24;
+          ctx.font = '48px monospace'; ctx.fillStyle = '#fff';
+          ctx.fillText('Breakout', cx, cy - 40);
+          ctx.restore();
           ctx.font = '28px monospace'; ctx.fillText('Press Space to Start', cx, cy);
           ctx.font = '16px monospace'; ctx.fillText('Controls: Arrow keys or Mouse/Touch | P: Pause | M: Mute | Shift+M: Reset High', cx, cy + 30);
         }
