@@ -40,6 +40,23 @@
     const BRICK_WIDTH = Math.floor((WIDTH - BRICK_OFFSET_LEFT * 2 - BRICK_PADDING * (BRICK_COLS - 1)) / BRICK_COLS);
   const GameState = { START: 'START', PLAYING: 'PLAYING', LEVEL_CLEARED: 'LEVEL_CLEARED', GAME_OVER: 'GAME_OVER' };
   const HEART_COLOR = '#C44536';
+  // Power-ups
+  const POWERUP_TYPES = {
+    EXTRA_LIFE: 'extraLife',
+  MULTI_BALL: 'multiBall',
+    PADDLE_EXPAND: 'paddleExpand',
+    PADDLE_SHRINK: 'paddleShrink',
+    SLOW_BALL: 'slowBall',
+    STICKY: 'stickyPaddle',
+  };
+  const POWERUP_COLORS = {
+    [POWERUP_TYPES.EXTRA_LIFE]: '#ff85a1',
+  [POWERUP_TYPES.MULTI_BALL]: '#9b59b6',
+    [POWERUP_TYPES.PADDLE_EXPAND]: '#4cd137',
+    [POWERUP_TYPES.PADDLE_SHRINK]: '#e84118',
+    [POWERUP_TYPES.SLOW_BALL]: '#00a8ff',
+    [POWERUP_TYPES.STICKY]: '#fbc531',
+  };
 
     // Audio module
     class AudioManager {
@@ -74,6 +91,7 @@
       playPaddleHit() { this.playTone(440, 0.06, 'square', 0.05); }
       playBrickHit() { this.playTone(660, 0.06, 'square', 0.05); }
       playLifeLost() { this.playTone(220, 0.25, 'sine', 0.07); }
+  playPowerUp() { this.playTone(520, 0.12, 'triangle', 0.07); }
       toggleMute() { this.muted = !this.muted; }
     }
 
@@ -133,7 +151,7 @@
       constructor() { this.radius = 8; this.x = 0; this.y = 0; this.vx = 0; this.vy = 0; this.speed = BASE_BALL_SPEED; this.launched = false; }
       resetOnPaddle(paddle) { this.launched = false; this.vx = 0; this.vy = 0; this.x = paddle.x + paddle.width / 2; this.y = paddle.y - this.radius; }
       enforceSpeed() { const s = Math.hypot(this.vx, this.vy) || 1; this.vx = (this.vx / s) * this.speed; this.vy = (this.vy / s) * this.speed; }
-      update(dt, paddle, audio, onLifeLost) {
+  update(dt, paddle, audio, onLifeLost, stickyActive = false) {
         if (!this.launched) return; const prevY = this.y;
         this.x += this.vx * dt; this.y += this.vy * dt;
         // Walls
@@ -145,8 +163,13 @@
         const prevBottom = prevY + r; const padLeft = paddle.x; const padRight = paddle.x + paddle.width; const padTop = paddle.y; const padBottom = paddle.y + paddle.height;
         const horizontalOverlap = ballRight >= padLeft && ballLeft <= padRight; const verticalOverlap = ballBottom >= padTop && ballTop <= padBottom; const crossedTopFromAbove = prevBottom <= padTop && this.vy > 0;
         if (horizontalOverlap && verticalOverlap && crossedTopFromAbove) {
-          this.y = padTop - r - 0.01; const paddleCenter = paddle.x + paddle.width / 2; let t = (this.x - paddleCenter) / (paddle.width / 2); t = Math.max(-1, Math.min(1, t));
-          const maxBounce = (60 * Math.PI) / 180; const angle = t * maxBounce; this.vx = this.speed * Math.sin(angle); this.vy = -this.speed * Math.cos(angle); audio.playPaddleHit();
+          if (stickyActive) {
+            // stick to paddle; wait for relaunch
+            this.launched = false; this.vx = 0; this.vy = 0; this.y = padTop - r - 0.01; audio.playPaddleHit();
+          } else {
+            this.y = padTop - r - 0.01; const paddleCenter = paddle.x + paddle.width / 2; let t = (this.x - paddleCenter) / (paddle.width / 2); t = Math.max(-1, Math.min(1, t));
+            const maxBounce = (60 * Math.PI) / 180; const angle = t * maxBounce; this.vx = this.speed * Math.sin(angle); this.vy = -this.speed * Math.cos(angle); audio.playPaddleHit();
+          }
         }
         // Bottom -> life lost
         if (this.y - this.radius > HEIGHT) { onLifeLost(); }
@@ -200,6 +223,65 @@
           }
         }
         return { hit: false };
+      }
+    }
+
+    // Power-up entity
+    class PowerUp {
+      constructor(x, y, type) {
+        this.x = x - 10; // center around spawn
+        this.y = y;
+        // API-friendly properties per requirements
+        this.width = 20;
+        this.height = 20;
+        // Back-compat aliases
+        this.w = this.width;
+        this.h = this.height;
+        this.type = type;
+        this.color = POWERUP_COLORS[type] || '#fff';
+        this.vy = 140;
+        this.alive = true;
+        // Step 1 fields (not yet used for activation here)
+        this.active = false;
+        this.duration = 0; // seconds (set when activated in later steps)
+      }
+      update(dt) {
+        this.y += this.vy * dt;
+        const h = this.h ?? this.height;
+        if (this.y - h > HEIGHT + 30) this.alive = false;
+      }
+      draw(ctx, lowGraphics = false) {
+        ctx.save();
+        if (!lowGraphics) { ctx.shadowColor = this.color + '88'; ctx.shadowBlur = 8; }
+        // rounded rect
+        const r = 5; const x = this.x, y = this.y; const w = this.w ?? this.width; const h = this.h ?? this.height;
+        ctx.fillStyle = this.color; ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath(); ctx.fill();
+        // icon letter
+        ctx.fillStyle = '#111';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const cx = x + w / 2, cy = y + h / 2;
+        let letter = '?';
+        switch (this.type) {
+          case POWERUP_TYPES.EXTRA_LIFE: letter = '+'; break;
+          case POWERUP_TYPES.MULTI_BALL: letter = 'M'; break;
+          case POWERUP_TYPES.PADDLE_EXPAND: letter = 'E'; break;
+          case POWERUP_TYPES.PADDLE_SHRINK: letter = 'S'; break;
+          case POWERUP_TYPES.SLOW_BALL: letter = 'C'; break; // clock
+          case POWERUP_TYPES.STICKY: letter = 'G'; break; // glue
+        }
+        ctx.fillText(letter, cx, cy + 1);
+        ctx.restore();
       }
     }
 
@@ -489,7 +571,12 @@
         this.state = GameState.START; this.score = 0; this.lives = 3; this.level = 1; this.paused = false; this.autoPaused = false;
         this.audio = new AudioManager(); this.renderer = new Renderer(this.ctx); this.particles = new Particles();
         this.highScores = new HighScoreManager(); this.highScoreFlash = 0; // seconds remaining for flash
-        this.paddle = new Paddle(); this.ball = new Ball(); this.bricks = new BrickField(this.level);
+  this.paddle = new Paddle(); this.ball = new Ball(); this.bricks = new BrickField(this.level);
+  // Power-ups and effects
+  this.powerUps = [];
+  this.effectTimers = { expand: 0, shrink: 0, slow: 0, sticky: 0 };
+  this.basePaddleWidth = this.paddle.width;
+  this.normalBallSpeed = this.ball.speed;
         this.resizeCanvas = this.resizeCanvas.bind(this); this.onVisibility = this.onVisibility.bind(this);
         window.addEventListener('resize', this.resizeCanvas); document.addEventListener('visibilitychange', this.onVisibility); this.resizeCanvas();
         // Input
@@ -553,11 +640,31 @@
       // Update systems
       update(dt) {
         if (!this.isPaused()) {
+          // Tick effect timers
+          if (this.effectTimers.expand > 0) this.effectTimers.expand = Math.max(0, this.effectTimers.expand - dt);
+          if (this.effectTimers.shrink > 0) this.effectTimers.shrink = Math.max(0, this.effectTimers.shrink - dt);
+          if (this.effectTimers.slow > 0) this.effectTimers.slow = Math.max(0, this.effectTimers.slow - dt);
+          if (this.effectTimers.sticky > 0) this.effectTimers.sticky = Math.max(0, this.effectTimers.sticky - dt);
+          // Apply paddle width effect (keep center where possible)
+          let factor = 1;
+          if (this.effectTimers.expand > 0) factor *= 1.33;
+          if (this.effectTimers.shrink > 0) factor *= 0.8;
+          const targetW = Math.round(this.basePaddleWidth * factor);
+          if (this.paddle.width !== targetW) {
+            const center = this.paddle.x + this.paddle.width / 2;
+            this.paddle.width = targetW;
+            this.paddle.x = center - this.paddle.width / 2;
+            this.paddle.clamp();
+          }
+          // Apply ball slow effect
+          const desiredSpeed = this.normalBallSpeed * (this.effectTimers.slow > 0 ? 0.7 : 1);
+          if (Math.abs(this.ball.speed - desiredSpeed) > 0.5) { this.ball.speed = desiredSpeed; this.ball.enforceSpeed(); }
           this.paddle.update(this.input.leftPressed, this.input.rightPressed);
           if (!this.ball.launched) { this.ball.x = this.paddle.x + this.paddle.width / 2; this.ball.y = this.paddle.y - this.ball.radius; }
         }
         if (!this.isPaused() && this.state === GameState.PLAYING) {
-          this.ball.update(dt, this.paddle, this.audio, () => this.onLifeLost());
+          const stickyActive = this.effectTimers.sticky > 0;
+          this.ball.update(dt, this.paddle, this.audio, () => this.onLifeLost(), stickyActive);
           const hit = this.bricks.handleCollisions(this.ball);
           if (hit.hit) {
             this.audio.playBrickHit();
@@ -567,12 +674,58 @@
               this.highScoreFlash = 2.5; // seconds
             }
             this.particles.spawnBrickParticles(hit.cx, hit.cy, hit.color);
+            // Chance to spawn a power-up
+            const spawnChance = 0.12;
+            if (Math.random() < spawnChance) {
+              let r = Math.random(); let type = POWERUP_TYPES.STICKY;
+              if (r < 0.15) type = POWERUP_TYPES.EXTRA_LIFE;
+              else if (r < 0.35) type = POWERUP_TYPES.MULTI_BALL;
+              else if (r < 0.55) type = POWERUP_TYPES.STICKY;
+              else if (r < 0.75) type = POWERUP_TYPES.SLOW_BALL;
+              else if (r < 0.88) type = POWERUP_TYPES.PADDLE_EXPAND;
+              else type = POWERUP_TYPES.PADDLE_SHRINK;
+              this.powerUps.push(new PowerUp(hit.cx, hit.cy, type));
+            }
           }
           if (this.bricks.allCleared()) { this.ball.resetOnPaddle(this.paddle); this.state = GameState.LEVEL_CLEARED; }
+          // Update power-ups and handle paddle collisions
+          for (const pu of this.powerUps) { pu.update(dt); }
+          // AABB collision with paddle
+          const px = this.paddle.x, py = this.paddle.y, pw = this.paddle.width, ph = this.paddle.height;
+          for (const pu of this.powerUps) {
+            if (!pu.alive) continue;
+            const overlap = pu.x < px + pw && pu.x + pu.w > px && pu.y < py + ph && pu.y + pu.h > py;
+            if (overlap) {
+              this.activatePowerUp(pu.type);
+              pu.alive = false;
+              this.audio.playPowerUp();
+            }
+          }
+          // Cull
+          if (this.powerUps.length) this.powerUps = this.powerUps.filter(p => p.alive);
         }
         if (!this.isPaused()) {
           this.particles.update(dt);
           if (this.highScoreFlash > 0) this.highScoreFlash = Math.max(0, this.highScoreFlash - dt);
+        }
+      }
+      activatePowerUp(type) {
+        switch (type) {
+          case POWERUP_TYPES.EXTRA_LIFE:
+            this.lives = Math.min(3, this.lives + 1);
+            break;
+          case POWERUP_TYPES.PADDLE_EXPAND:
+            this.effectTimers.expand = Math.max(this.effectTimers.expand, 10);
+            break;
+          case POWERUP_TYPES.PADDLE_SHRINK:
+            this.effectTimers.shrink = Math.max(this.effectTimers.shrink, 10);
+            break;
+          case POWERUP_TYPES.SLOW_BALL:
+            this.effectTimers.slow = Math.max(this.effectTimers.slow, 8);
+            break;
+          case POWERUP_TYPES.STICKY:
+            this.effectTimers.sticky = Math.max(this.effectTimers.sticky, 8);
+            break;
         }
       }
       onLifeLost() {
@@ -590,6 +743,10 @@
         this.renderer.beginWorld(now, this.lastTick);
   this.bricks.draw(this.ctx, this.renderer.lowGraphics);
   this.particles.draw(this.ctx);
+  // Power-ups (falling items)
+  if (this.powerUps && this.powerUps.length) {
+    for (const pu of this.powerUps) pu.draw(this.ctx, this.renderer.lowGraphics);
+  }
   this.paddle.draw(this.ctx, this.renderer.lowGraphics);
   this.ball.draw(this.ctx, this.renderer.lowGraphics);
         this.renderer.endWorld();

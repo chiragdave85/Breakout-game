@@ -160,3 +160,21 @@ Use this checklist to validate features after changes. Record actual results as 
 - Lives and level reset
 - Brick durability, power-ups
 - Sound effects and UI polish
+
+### Step 15: Power-ups
+
+- Bricks have a chance (~12%) to spawn a falling power-up at their center when destroyed.
+- Power-ups fall at a steady speed and render as colored rounded squares with a letter icon.
+- Paddle pickup uses AABB collision with the paddle rectangle.
+	- On collision: activate the effect, remove the item, and play a short collect sound.
+
+Effects implemented:
+- Extra Life (+): Adds one life, capped at 3.
+- Expand (E): Temporarily increases paddle width (10s). Center preserved and clamped in bounds.
+- Shrink (S): Temporarily reduces paddle width (10s).
+- Slow (C): Temporarily slows the ball to 70% speed (8s) while maintaining direction.
+- Sticky (G): For 8s, the next paddle hit will stick the ball to the paddle. Press Space or Click/Touch to relaunch.
+
+Notes:
+- Multiple effects can overlap; timers refresh if you collect the same effect again.
+- Low-graphics mode disables power-up shadows but keeps gameplay intact.
