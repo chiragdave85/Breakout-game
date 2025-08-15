@@ -410,7 +410,7 @@
           ctx.fillStyle = '#fff';
           ctx.shadowColor = '#ffffff55';
           ctx.shadowBlur = 10;
-          ctx.fillText('Press Space to Start', cx, cy);
+          ctx.fillText('Press Space or Click/Touch to Start', cx, cy);
           ctx.restore();
           ctx.font = '16px monospace'; ctx.fillText('Controls: Arrow keys or Mouse/Touch | P: Pause | M: Mute | Shift+M: Reset High', cx, cy + 30);
         }
@@ -473,10 +473,12 @@
         canvas.addEventListener('touchmove', (e) => {
           if (e.cancelable) e.preventDefault(); if (this.isPaused()) return; const t = e.touches[0]; const x = this.toGameX(t.clientX); if (Math.abs(x - this.touchStartX) > this.TAP_MOVE_THRESHOLD) this.touchMoved = true; this.onPaddleMove(x);
         }, { passive: false });
-        canvas.addEventListener('touchend', (e) => {
+  canvas.addEventListener('touchend', (e) => {
           if (e.cancelable) e.preventDefault(); if (this.isPaused()) return; if (!this.touchMoved) this.onTapAction();
         }, { passive: false });
-        canvas.addEventListener('pointerdown', () => this.onPointerInteract());
+  canvas.addEventListener('pointerdown', () => this.onPointerInteract());
+  // Allow mouse/trackpad click to start/advance (treated like a tap)
+  canvas.addEventListener('mousedown', (e) => { e.preventDefault(); if (this.isPaused()) return; this.onTapAction(); });
       }
     }
 
