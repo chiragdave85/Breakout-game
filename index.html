@@ -207,10 +207,18 @@
         this._lastHudUpdate = performance.now();
   // Lives icons
   this.icons = { empty: new Image(), filled: new Image(), ready: false, _loaded: 0 };
-  this.icons.empty.onload = () => { this.icons._loaded++; if (this.icons._loaded >= 2) this.icons.ready = true; };
-  this.icons.filled.onload = () => { this.icons._loaded++; if (this.icons._loaded >= 2) this.icons.ready = true; };
-  this.icons.empty.src = 'heart-empty.png'; // per request: use empty for full life
-  this.icons.filled.src = 'heart-filled.png'; // and filled for lost life
+        this.icons.empty.onload = () => { this.icons._loaded++; if (this.icons._loaded >= 2) this.icons.ready = true; };
+        this.icons.filled.onload = () => { this.icons._loaded++; if (this.icons._loaded >= 2) this.icons.ready = true; };
+        this.icons.empty.onerror = (e) => { console.error('Failed to load heart-empty.png', e); };
+        this.icons.filled.onerror = (e) => { console.error('Failed to load heart-filled.png', e); };
+        try {
+          this.icons.empty.src = new URL('heart-empty.png', window.location.href).toString();
+          this.icons.filled.src = new URL('heart-filled.png', window.location.href).toString();
+        } catch(_) {
+          // Fallback to relative if URL construction fails
+          this.icons.empty.src = 'heart-empty.png';
+          this.icons.filled.src = 'heart-filled.png';
+        }
       }
       triggerShake(mag = 3, durationMs = 120) { this.shake.magnitude = mag; this.shake.duration = durationMs / 1000; this.shake.time = this.shake.duration; }
       triggerHeartPop(slot, durationMs = 350) { this.heartPop.slot = slot; this.heartPop.duration = durationMs / 1000; this.heartPop.time = this.heartPop.duration; }
@@ -221,11 +229,13 @@
       }
       endWorld() { this.ctx.restore(); }
       drawBackground() { const ctx = this.ctx; ctx.fillStyle = '#111'; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
-      drawHUD(score, lives, level, highScore, highFlashAlpha = 0, gameState = GameState.PLAYING) {
-        // Update HUD-local animations
-        const now = performance.now();
-        const dt = Math.min(0.033, Math.max(0.001, (now - this._lastHudUpdate) / 1000));
-        this._lastHudUpdate = now;
+      drawHUD(score, lives, level, highScore, highFlashAlpha = 0, gameState = GameState.PLAYING, dt = 0) {
+        // Update HUD-local animations (use dt from main loop if provided)
+        if (!dt || !isFinite(dt) || dt <= 0) {
+          const now = performance.now();
+          dt = Math.max(0.001, (now - this._lastHudUpdate) / 1000);
+          this._lastHudUpdate = now;
+        }
         if (this.heartPop.time > 0) this.heartPop.time = Math.max(0, this.heartPop.time - dt);
 
         const ctx = this.ctx; ctx.save(); ctx.textBaseline = 'top';
@@ -484,12 +494,24 @@
       }
       // Scaling
       resizeCanvas() {
-        const dpr = window.devicePixelRatio || 1; const scaleX = window.innerWidth / WIDTH; const scaleY = window.innerHeight / HEIGHT; this.currentScale = Math.max(0.1, Math.min(scaleX, scaleY));
+        const dpr = window.devicePixelRatio || 1;
+        const scaleX = window.innerWidth / WIDTH; const scaleY = window.innerHeight / HEIGHT;
+        this.currentScale = Math.max(0.1, Math.min(scaleX, scaleY));
         const cssW = Math.floor(WIDTH * this.currentScale); const cssH = Math.floor(HEIGHT * this.currentScale);
-        this.canvas.style.width = cssW + 'px'; this.canvas.style.height = cssH + 'px'; this.canvas.width = Math.floor(cssW * dpr); this.canvas.height = Math.floor(cssH * dpr);
-        this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.scale(dpr * this.currentScale, dpr * this.currentScale);
+        // CSS controls visual size; backing store is only DPR-scaled to keep draw cost low
+        this.canvas.style.width = cssW + 'px';
+        this.canvas.style.height = cssH + 'px';
+        this.canvas.width = Math.floor(WIDTH * dpr);
+        this.canvas.height = Math.floor(HEIGHT * dpr);
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.scale(dpr, dpr);
       }
-      toGameX(clientX) { const rect = this.canvas.getBoundingClientRect(); const xCss = clientX - rect.left; return xCss / this.currentScale; }
+      toGameX(clientX) {
+        const rect = this.canvas.getBoundingClientRect();
+        const xCss = clientX - rect.left;
+        // currentScale already reflects CSS scale; logical = css / currentScale
+        return xCss / this.currentScale;
+      }
       // Pause control
       isPaused() { return this.paused || this.autoPaused; }
       onVisibility() { this.autoPaused = document.hidden; }
@@ -556,7 +578,7 @@
         this.renderer.endWorld();
         // Compute a flashing alpha [0..1] for the high score effect
         const flashAlpha = this.highScoreFlash > 0 ? 0.5 + 0.5 * Math.sin((2 * Math.PI) * (performance.now() / 200)) : 0;
-  this.renderer.drawHUD(this.score, this.lives, this.level, this.highScores.value, flashAlpha, this.state);
+  this.renderer.drawHUD(this.score, this.lives, this.level, this.highScores.value, flashAlpha, this.state, dt);
         this.renderer.drawFPS();
         this.renderer.drawOverlay(this.state, this.isPaused());
       }
@@ -564,7 +586,7 @@
       loop(now) {
         // FPS calc
         this.frames++; if (now - this.lastFpsUpdate > 1000) { this.renderer.fps = Math.round((this.frames * 1000) / (now - this.lastFpsUpdate)); this.frames = 0; this.lastFpsUpdate = now; }
-        const dt = Math.min(0.033, Math.max(0.001, (now - this.lastTick) / 1000)); this.lastTick = now;
+  const dt = Math.min(0.05, Math.max(0.001, (now - this.lastTick) / 1000)); this.lastTick = now;
         this.ctx.clearRect(0, 0, WIDTH, HEIGHT);
         this.update(dt); this.draw(now);
         requestAnimationFrame((t) => this.loop(t));
