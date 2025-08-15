@@ -177,9 +177,15 @@
             const alive = this.isBrickAliveForLevel(level, r, c); row.push({ x, y, w: BRICK_WIDTH, h: BRICK_HEIGHT, alive, color: colors[r % colors.length] }); }
           this.bricks.push(row); }
       }
-      draw(ctx) {
-        for (let r = 0; r < BRICK_ROWS; r++) { for (let c = 0; c < BRICK_COLS; c++) { const b = this.bricks[r][c]; if (!b.alive) continue;
-            ctx.save(); ctx.fillStyle = b.color; ctx.shadowColor = b.color + '80'; ctx.shadowBlur = 8; ctx.fillRect(b.x, b.y, b.w, b.h); ctx.restore(); } }
+      draw(ctx, lowGraphics = false) {
+        for (let r = 0; r < BRICK_ROWS; r++) {
+          for (let c = 0; c < BRICK_COLS; c++) {
+            const b = this.bricks[r][c]; if (!b.alive) continue;
+            ctx.save(); ctx.fillStyle = b.color;
+            if (!lowGraphics) { ctx.shadowColor = b.color + '80'; ctx.shadowBlur = 8; }
+            ctx.fillRect(b.x, b.y, b.w, b.h); ctx.restore();
+          }
+        }
       }
       allCleared() { for (let r = 0; r < BRICK_ROWS; r++) for (let c = 0; c < BRICK_COLS; c++) if (this.bricks[r][c].alive) return false; return true; }
       handleCollisions(ball) {
@@ -376,8 +382,8 @@
         }
         const dx = Math.round(cx - dw / 2);
         const dy = Math.round(cy - dh / 2);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = this.lowGraphics ? 'low' : 'high';
         ctx.drawImage(img, dx, dy, dw, dh);
         ctx.restore();
       }
@@ -497,8 +503,10 @@
       // Scaling
       resizeCanvas() {
         const dpr = window.devicePixelRatio || 1;
-        const scaleX = window.innerWidth / WIDTH; const scaleY = window.innerHeight / HEIGHT;
-        this.currentScale = Math.max(0.1, Math.min(scaleX, scaleY));
+  const scaleX = window.innerWidth / WIDTH; const scaleY = window.innerHeight / HEIGHT;
+  const target = Math.max(0.1, Math.min(scaleX, scaleY));
+  // Cap CSS scale to limit composite cost on large viewports
+  this.currentScale = Math.min(1.25, target);
         const cssW = Math.floor(WIDTH * this.currentScale); const cssH = Math.floor(HEIGHT * this.currentScale);
         // CSS controls visual size; backing store is only DPR-scaled to keep draw cost low
         this.canvas.style.width = cssW + 'px';
@@ -573,7 +581,7 @@
     draw(now, dt) {
         this.renderer.drawBackground();
         this.renderer.beginWorld(now, this.lastTick);
-  this.bricks.draw(this.ctx);
+  this.bricks.draw(this.ctx, this.renderer.lowGraphics);
   this.particles.draw(this.ctx);
   this.paddle.draw(this.ctx, this.renderer.lowGraphics);
   this.ball.draw(this.ctx, this.renderer.lowGraphics);
