@@ -27,9 +27,10 @@
     // Constants and simple enums
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const WIDTH = 800;
-    const HEIGHT = 600;
-    const MAX_LIVES = 3;
+  const WIDTH = 800;
+  const HEIGHT = 600;
+  const MAX_LIVES = 3;
+  const MAX_BALLS = 4;
     const BASE_BALL_SPEED = 380;
     const MAX_BALL_SPEED = 900;
   const BRICK_COLS = 10;
@@ -591,7 +592,7 @@
         this.state = GameState.START; this.score = 0; this.lives = 3; this.level = 1; this.paused = false; this.autoPaused = false;
         this.audio = new AudioManager(); this.renderer = new Renderer(this.ctx); this.particles = new Particles();
         this.highScores = new HighScoreManager(); this.highScoreFlash = 0; // seconds remaining for flash
-  this.paddle = new Paddle(); this.ball = new Ball(); this.bricks = new BrickField(this.level);
+  this.paddle = new Paddle(); this.ball = new Ball(); this.balls = [this.ball]; this.bricks = new BrickField(this.level);
   // Power-ups and effects
   this.powerUps = [];
   this.effectTimers = { expand: 0, shrink: 0, slow: 0, sticky: 0 };
@@ -641,17 +642,18 @@
       onVisibility() { this.autoPaused = document.hidden; }
       // Input-driven actions
       onPaddleMove(x) {
-        if (this.isPaused()) return; this.paddle.x = x - this.paddle.width / 2; this.paddle.clamp(); if (!this.ball.launched) { this.ball.x = this.paddle.x + this.paddle.width / 2; this.ball.y = this.paddle.y - this.ball.radius; }
+        if (this.isPaused()) return; this.paddle.x = x - this.paddle.width / 2; this.paddle.clamp();
+        for (const b of this.balls) { if (!b.launched) { b.x = this.paddle.x + this.paddle.width / 2; b.y = this.paddle.y - b.radius; } }
       }
       onPrimaryAction() {
-        if (this.state === GameState.START) { this.state = GameState.PLAYING; if (!this.ball.launched) { const angle = -Math.PI / 4; this.ball.vx = Math.cos(angle) * this.ball.speed; this.ball.vy = Math.sin(angle) * this.ball.speed; this.ball.launched = true; } }
-        else if (this.state === GameState.PLAYING) { if (!this.ball.launched) { const angle = -Math.PI / 4; this.ball.vx = Math.cos(angle) * this.ball.speed; this.ball.vy = Math.sin(angle) * this.ball.speed; this.ball.launched = true; } }
-        else if (this.state === GameState.LEVEL_CLEARED) { this.level += 1; this.ball.speed = Math.min(MAX_BALL_SPEED, Math.round(this.ball.speed * 1.1)); this.bricks.init(this.level); this.ball.resetOnPaddle(this.paddle); this.state = GameState.PLAYING; }
-        else if (this.state === GameState.GAME_OVER) { this.score = 0; this.lives = 3; this.level = 1; this.ball.speed = BASE_BALL_SPEED; this.bricks.init(this.level); this.ball.resetOnPaddle(this.paddle); this.state = GameState.START; }
+        if (this.state === GameState.START) { this.state = GameState.PLAYING; for (const b of this.balls) if (!b.launched) { const angle = -Math.PI / 4; b.vx = Math.cos(angle) * b.speed; b.vy = Math.sin(angle) * b.speed; b.launched = true; } }
+        else if (this.state === GameState.PLAYING) { for (const b of this.balls) if (!b.launched) { const angle = -Math.PI / 4; b.vx = Math.cos(angle) * b.speed; b.vy = Math.sin(angle) * b.speed; b.launched = true; } }
+        else if (this.state === GameState.LEVEL_CLEARED) { this.level += 1; this.normalBallSpeed = Math.min(MAX_BALL_SPEED, Math.round(this.normalBallSpeed * 1.1)); this.bricks.init(this.level); this.balls = [new Ball()]; this.ball = this.balls[0]; this.ball.speed = this.normalBallSpeed; this.ball.resetOnPaddle(this.paddle); this.state = GameState.PLAYING; }
+        else if (this.state === GameState.GAME_OVER) { this.score = 0; this.lives = MAX_LIVES; this.level = 1; this.normalBallSpeed = BASE_BALL_SPEED; this.bricks.init(this.level); this.balls = [new Ball()]; this.ball = this.balls[0]; this.ball.speed = this.normalBallSpeed; this.ball.resetOnPaddle(this.paddle); this.state = GameState.START; }
       }
       onTapAction() {
-        if (this.state === GameState.START) { this.state = GameState.PLAYING; if (!this.ball.launched) { const angle = -Math.PI / 4; this.ball.vx = Math.cos(angle) * this.ball.speed; this.ball.vy = Math.sin(angle) * this.ball.speed; this.ball.launched = true; } }
-        else if (this.state === GameState.LEVEL_CLEARED) { this.level += 1; this.ball.speed = Math.min(MAX_BALL_SPEED, Math.round(this.ball.speed * 1.1)); this.bricks.init(this.level); this.ball.resetOnPaddle(this.paddle); this.state = GameState.PLAYING; }
+        if (this.state === GameState.START) { this.state = GameState.PLAYING; for (const b of this.balls) if (!b.launched) { const angle = -Math.PI / 4; b.vx = Math.cos(angle) * b.speed; b.vy = Math.sin(angle) * b.speed; b.launched = true; } }
+        else if (this.state === GameState.LEVEL_CLEARED) { this.level += 1; this.normalBallSpeed = Math.min(MAX_BALL_SPEED, Math.round(this.normalBallSpeed * 1.1)); this.bricks.init(this.level); this.balls = [new Ball()]; this.ball = this.balls[0]; this.ball.speed = this.normalBallSpeed; this.ball.resetOnPaddle(this.paddle); this.state = GameState.PLAYING; }
         // In PLAYING, a tap does not launch; matches previous touch behavior.
       }
       onResetHighScore() {
@@ -678,33 +680,31 @@
           }
           // Apply ball slow effect
           const desiredSpeed = this.normalBallSpeed * (this.effectTimers.slow > 0 ? 0.7 : 1);
-          if (Math.abs(this.ball.speed - desiredSpeed) > 0.5) { this.ball.speed = desiredSpeed; this.ball.enforceSpeed(); }
+          for (const b of this.balls) { if (Math.abs(b.speed - desiredSpeed) > 0.5) { b.speed = desiredSpeed; b.enforceSpeed(); } }
           this.paddle.update(this.input.leftPressed, this.input.rightPressed);
-          if (!this.ball.launched) { this.ball.x = this.paddle.x + this.paddle.width / 2; this.ball.y = this.paddle.y - this.ball.radius; }
+          for (const b of this.balls) { if (!b.launched) { b.x = this.paddle.x + this.paddle.width / 2; b.y = this.paddle.y - b.radius; } }
         }
         if (!this.isPaused() && this.state === GameState.PLAYING) {
           const stickyActive = this.effectTimers.sticky > 0;
-          this.ball.update(dt, this.paddle, this.audio, () => this.onLifeLost(), stickyActive);
-          const hit = this.bricks.handleCollisions(this.ball);
-          if (hit.hit) {
-            this.audio.playBrickHit();
-            this.score += hit.scoreDelta * Math.max(1, this.level);
-            if (this.highScores.setIfHigher(this.score)) {
-              // Trigger a brief flash effect for new high score
-              this.highScoreFlash = 2.5; // seconds
-            }
-            this.particles.spawnBrickParticles(hit.cx, hit.cy, hit.color);
-            // Chance to spawn a power-up
-            const spawnChance = 0.12;
-            if (Math.random() < spawnChance) {
-              let r = Math.random(); let type = POWERUP_TYPES.STICKY;
-              if (r < 0.15) type = POWERUP_TYPES.EXTRA_LIFE;
-              else if (r < 0.35) type = POWERUP_TYPES.MULTI_BALL;
-              else if (r < 0.55) type = POWERUP_TYPES.STICKY;
-              else if (r < 0.75) type = POWERUP_TYPES.SLOW_BALL;
-              else if (r < 0.88) type = POWERUP_TYPES.PADDLE_EXPAND;
-              else type = POWERUP_TYPES.PADDLE_SHRINK;
-              this.powerUps.push(new PowerUp(hit.cx, hit.cy, type));
+          for (const b of [...this.balls]) {
+            b.update(dt, this.paddle, this.audio, () => this.onBallOut(b), stickyActive);
+            const hit = this.bricks.handleCollisions(b);
+            if (hit.hit) {
+              this.audio.playBrickHit();
+              this.score += hit.scoreDelta * Math.max(1, this.level);
+              if (this.highScores.setIfHigher(this.score)) { this.highScoreFlash = 2.5; }
+              this.particles.spawnBrickParticles(hit.cx, hit.cy, hit.color);
+              const spawnChance = 0.12;
+              if (Math.random() < spawnChance) {
+                let r = Math.random(); let type = POWERUP_TYPES.STICKY;
+                if (r < 0.15) type = POWERUP_TYPES.EXTRA_LIFE;
+                else if (r < 0.35) type = POWERUP_TYPES.MULTI_BALL;
+                else if (r < 0.55) type = POWERUP_TYPES.STICKY;
+                else if (r < 0.75) type = POWERUP_TYPES.SLOW_BALL;
+                else if (r < 0.88) type = POWERUP_TYPES.PADDLE_EXPAND;
+                else type = POWERUP_TYPES.PADDLE_SHRINK;
+                this.powerUps.push(new PowerUp(hit.cx, hit.cy, type));
+              }
             }
           }
           if (this.bricks.allCleared()) { this.ball.resetOnPaddle(this.paddle); this.state = GameState.LEVEL_CLEARED; }
@@ -736,6 +736,26 @@
             this.lives = Math.min(MAX_LIVES, this.lives + 1);
             if (this.lives > prev) this.renderer.triggerLifeGain();
             break;
+          case POWERUP_TYPES.MULTI_BALL: {
+            // Duplicate existing balls, small spread
+            const newBalls = [];
+            for (const b of this.balls) {
+              if (!b.launched) continue; // skip resting balls
+              const s = b.speed;
+              // create up to 2 extra per current ball
+              const angles = [Math.atan2(b.vy, b.vx) - 0.20, Math.atan2(b.vy, b.vx) + 0.20];
+              for (const a of angles) {
+                if (this.balls.length + newBalls.length >= MAX_BALLS) break;
+                const nb = new Ball();
+                nb.x = b.x; nb.y = b.y; nb.speed = s; nb.launched = true;
+                nb.vx = Math.cos(a) * s; nb.vy = Math.sin(a) * s;
+                newBalls.push(nb);
+              }
+              if (this.balls.length + newBalls.length >= MAX_BALLS) break;
+            }
+            if (newBalls.length) this.balls.push(...newBalls);
+            break;
+          }
           case POWERUP_TYPES.PADDLE_EXPAND:
             this.effectTimers.expand = Math.max(this.effectTimers.expand, 10);
             break;
@@ -750,14 +770,20 @@
             break;
         }
       }
+      onBallOut(ball) {
+        const idx = this.balls.indexOf(ball);
+        if (idx !== -1) this.balls.splice(idx, 1);
+        if (this.balls.length === 0) {
+          this.onLifeLost();
+          if (this.state !== GameState.GAME_OVER) { this.balls = [new Ball()]; this.ball = this.balls[0]; this.ball.speed = this.normalBallSpeed; this.ball.resetOnPaddle(this.paddle); }
+        }
+      }
       onLifeLost() {
-  // Determine which heart slot changes from filled to outline (0-based left to right)
-  const slot = Math.max(0, Math.min(2, this.lives - 1));
-  this.lives -= 1;
-  this.renderer.triggerHeartPop(slot);
-  this.audio.playLifeLost();
-  if (this.lives <= 0) { this.ball.resetOnPaddle(this.paddle); this.state = GameState.GAME_OVER; }
-  else { this.ball.resetOnPaddle(this.paddle); }
+        const slot = Math.max(0, Math.min(2, this.lives - 1));
+        this.lives -= 1;
+        this.renderer.triggerHeartPop(slot);
+        this.audio.playLifeLost();
+        if (this.lives <= 0) { this.state = GameState.GAME_OVER; }
       }
       // Draw
     draw(now, dt) {
@@ -770,7 +796,7 @@
     for (const pu of this.powerUps) pu.draw(this.ctx, this.renderer.lowGraphics);
   }
   this.paddle.draw(this.ctx, this.renderer.lowGraphics);
-  this.ball.draw(this.ctx, this.renderer.lowGraphics);
+  for (const b of this.balls) b.draw(this.ctx, this.renderer.lowGraphics);
         this.renderer.endWorld();
         // Compute a flashing alpha [0..1] for the high score effect
         const flashAlpha = this.highScoreFlash > 0 ? 0.5 + 0.5 * Math.sin((2 * Math.PI) * (performance.now() / 200)) : 0;
