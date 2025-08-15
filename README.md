@@ -64,6 +64,97 @@ A simple Breakout game built step-by-step in a single `index.html` using HTML5 C
 - Paddle hit: short beep, Brick hit: higher beep, Life lost: lower tone
 - M key toggles mute
 
+### Step 10
+- Touch controls: drag to move paddle, tap to start/advance level
+- Pause toggle: P key pauses/resumes during PLAYING (shows overlay)
+- Audio priming: first interaction (click/tap) enables sounds per browser policy
+
+### Step 11
+- Visual polish: particle effects when bricks break
+- Subtle screen shake plumbing (kept minimal; paddle-hit shake disabled)
+
+### Step 12
+- Responsive: canvas scales to fit window with letterboxing; logical size remains 800×600
+- Input mapping respects scaling for mouse/touch
+- Auto-pause when tab is hidden (document.visibilitychange); resume on return
+
+### Step 13
+- Refactor to modules (still single-file): Game, Paddle, Ball, BrickField, Input, AudioManager, Particles, Renderer
+- Clear responsibilities and inline comments; behavior preserved
+
+### Step 14: Manual QA Checklist
+
+Use this checklist to validate features after changes. Record actual results as needed.
+
+#### Controls
+- [ ] Keyboard Left/Right moves paddle smoothly, clamped within bounds
+	- Expected: Paddle moves; ball follows paddle when not launched
+- [ ] Mouse move maps correctly across resized canvas
+	- Expected: Paddle centers under cursor; ball tracks when resting
+- [ ] Touch drag moves paddle; tap starts/advances level
+	- Expected: No tap-to-launch during PLAYING
+
+#### Ball and Collisions
+- [ ] Walls reflect correctly (left/right/top)
+- [ ] Paddle collision reflects upward; angle depends on hit position; speed constant
+- [ ] Brick collision removes exactly one brick per frame; score increases with level multiplier; particles spawn
+
+#### Game States
+- [ ] START overlay appears on load; Space or tap starts and launches
+- [ ] PLAYING updates run; P toggles pause overlay and freezes updates
+- [ ] LEVEL_CLEARED shows overlay; Space or tap advances to next level and increases ball speed
+- [ ] GAME_OVER after lives reach 0; Space resets score/lives/level
+
+#### HUD and Scoring
+- [ ] Score (left), Lives (center), Level (right) update correctly
+- [ ] +100 per brick × max(1, level) multiplier applied
+
+#### Lives and Game Over
+- [ ] Ball falling below bottom decrements lives; on 0 lives, GAME_OVER
+- [ ] Ball resets onto paddle after life loss
+
+#### Progression and Speed
+- [ ] Clearing level advances Level and increases ball speed ~10% (capped)
+
+#### Effects and Feedback
+- [ ] Brick destroys spawn particles near impact center
+- [ ] No shake on paddle-hit; no unintended shakes elsewhere
+
+#### Pause, Audio, and Mute
+- [ ] P pauses/resumes only in PLAYING; overlay shows "Paused"
+- [ ] M toggles mute; sounds suppressed when muted
+- [ ] First click/tap enables audio (autoplay policy)
+
+#### Responsiveness and Visibility
+- [ ] Window resize preserves aspect ratio (letterboxed) and crispness on HiDPI
+- [ ] Pointer/finger maps correctly at all sizes; paddle aligns with edges
+- [ ] Switching tabs auto-pauses; returning resumes (unless manually paused)
+
+#### Performance
+- [ ] FPS readout near 60 on typical hardware; no obvious stutters
+
+#### Optional Audio Checks
+- [ ] Paddle hit plays short tone; brick hit higher tone; life lost lower tone
+
+---
+
+### Common Issues and Quick Fixes
+
+- Ball tunneling through bricks/paddle (at high speeds)
+	- Fix: Substep integration when `dt > 0.016` (e.g., split update into 2 substeps); continue using previous-position checks for paddle crossing
+- Ball stuck near-horizontal
+	- Fix: Enforce minimum vertical component after reflections (e.g., `|vy| >= speed * 0.2`), or slightly bias angle when `|t|` near edges
+- Input scaling off after resize
+	- Fix: Ensure `toGameX` uses `getBoundingClientRect()` and divides by `currentScale`; update transform with `dpr * currentScale` on resize
+- Blurry canvas on HiDPI
+	- Fix: Backing resolution = CSS size × devicePixelRatio; reset and scale context after resize
+- Audio not playing
+	- Fix: Prime/resume AudioContext on first pointer event; check mute state
+- Performance dips during effects
+	- Fix: Reduce `MAX_PARTICLES`, per-hit particle count, or shadowBlur values
+- Lives or GAME_OVER logic incorrect
+	- Fix: Confirm bottom check (`ball.y - radius > HEIGHT`) triggers life loss and transitions at 0 lives
+
 ## Next Steps
 - Lives and level reset
 - Brick durability, power-ups
