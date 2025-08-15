@@ -205,6 +205,12 @@
         // Heart pop animation state
         this.heartPop = { slot: -1, time: 0, duration: 0.35 };
         this._lastHudUpdate = performance.now();
+  // Lives icons
+  this.icons = { empty: new Image(), filled: new Image(), ready: false, _loaded: 0 };
+  this.icons.empty.onload = () => { this.icons._loaded++; if (this.icons._loaded >= 2) this.icons.ready = true; };
+  this.icons.filled.onload = () => { this.icons._loaded++; if (this.icons._loaded >= 2) this.icons.ready = true; };
+  this.icons.empty.src = 'heart-empty.png'; // per request: use empty for full life
+  this.icons.filled.src = 'heart-filled.png'; // and filled for lost life
       }
       triggerShake(mag = 3, durationMs = 120) { this.shake.magnitude = mag; this.shake.duration = durationMs / 1000; this.shake.time = this.shake.duration; }
       triggerHeartPop(slot, durationMs = 350) { this.heartPop.slot = slot; this.heartPop.duration = durationMs / 1000; this.heartPop.time = this.heartPop.duration; }
@@ -255,10 +261,16 @@
         let startX = Math.round(WIDTH / 2 - totalW / 2);
         const y = 26;
         for (let i = 0; i < totalSlots; i++) {
-          const isFilled = i < clampedLives;
-          // Base heart (filled or outline)
-          if (isFilled) this.drawHeart(startX, y, size, HEART_COLOR);
-          else this.drawHeartOutline(startX, y, size, HEART_COLOR);
+          const isFilled = i < clampedLives; // remaining lives (full)
+          // Base icon (per request: empty.png for full life, filled.png for lost)
+          if (this.icons.ready) {
+            const img = isFilled ? this.icons.empty : this.icons.filled;
+            this.drawHeartImage(startX, y, size, img);
+          } else {
+            // Fallback to vector hearts while icons load
+            if (isFilled) this.drawHeart(startX, y, size, HEART_COLOR);
+            else this.drawHeartOutline(startX, y, size, HEART_COLOR);
+          }
           // Pop animation overlay for the just-lost heart slot
           if (i === this.heartPop.slot && this.heartPop.time > 0) {
             const k = 1 - (this.heartPop.time / this.heartPop.duration); // 0 -> 1
@@ -266,7 +278,13 @@
             const scale = 1 + 0.4 * ease;
             const alpha = 1 - ease;
             const yOffset = -6 * ease;
-            this.drawHeart(startX, y + yOffset, size, HEART_COLOR, { scale, alpha });
+            if (this.icons.ready) {
+              // Overlay uses the icon that just changed (lost life => now shows filled)
+              const img = this.icons.filled;
+              this.drawHeartImage(startX, y + yOffset, size, img, { scale, alpha });
+            } else {
+              this.drawHeart(startX, y + yOffset, size, HEART_COLOR, { scale, alpha });
+            }
           }
           startX += size + spacing;
         }
@@ -325,6 +343,33 @@
         ctx.restore();
       }
       drawFPS() { const ctx = this.ctx; ctx.save(); ctx.font = '16px monospace'; ctx.fillStyle = '#0f0'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left'; ctx.fillText(`FPS: ${this.fps}`, 10, HEIGHT - 10); ctx.restore(); }
+
+      // Draw a heart icon image, with optional scale/alpha animated around center
+      drawHeartImage(x, y, size, img, opts = undefined) {
+        const ctx = this.ctx;
+        const scale = opts?.scale || 1;
+        const alpha = opts?.alpha ?? 1;
+        ctx.save();
+        const cx = x + size / 2, cy = y + size / 2;
+        ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
+        ctx.translate(-cx, -cy);
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+        // Preserve aspect ratio of the image; letterbox inside size x size
+        const iw = img.naturalWidth || img.width || size;
+        const ih = img.naturalHeight || img.height || size;
+        let dw = size, dh = size;
+        if (iw && ih) {
+          const ir = iw / ih; const sr = 1; // target square
+          if (ir > sr) { dh = size / ir; dw = size; } else { dw = size * ir; dh = size; }
+        }
+        const dx = Math.round(cx - dw / 2);
+        const dy = Math.round(cy - dh / 2);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, dx, dy, dw, dh);
+        ctx.restore();
+      }
       drawOverlay(gameState, paused) {
         const ctx = this.ctx; ctx.save(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const cx = WIDTH / 2; const cy = HEIGHT / 2;
         if (gameState === GameState.START) {
