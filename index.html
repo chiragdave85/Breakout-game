@@ -31,6 +31,7 @@
   const HEIGHT = 600;
   const MAX_LIVES = 3;
   const MAX_BALLS = 4;
+  const STICKY_SINGLE_USE = false; // if true, sticky is consumed on first paddle stick
     const BASE_BALL_SPEED = 380;
     const MAX_BALL_SPEED = 900;
   const BRICK_COLS = 10;
@@ -142,7 +143,7 @@
 
     // Paddle entity
     class Paddle {
-  constructor() { this.width = 120; this.height = 18; this.x = (WIDTH - 120) / 2; this.y = HEIGHT - 40; this.speed = 8; this.dx = 0; this.expandActive = false; this.shrinkActive = false; }
+  constructor() { this.width = 120; this.height = 18; this.x = (WIDTH - 120) / 2; this.y = HEIGHT - 40; this.speed = 8; this.dx = 0; this.expandActive = false; this.shrinkActive = false; this.stickyActive = false; }
       clamp() { this.x = Math.max(0, Math.min(WIDTH - this.width, this.x)); }
       update(leftPressed, rightPressed) {
         this.dx = 0; if (leftPressed) this.dx -= this.speed; if (rightPressed) this.dx += this.speed; this.x += this.dx; this.clamp();
@@ -150,9 +151,10 @@
   draw(ctx, lowGraphics) {
     ctx.save();
     let color = '#09f'; let shadow = '#00f8';
-    if (this.expandActive && !this.shrinkActive) { color = '#2ecc71'; shadow = '#2ecc7188'; }
+  if (this.expandActive && !this.shrinkActive) { color = '#2ecc71'; shadow = '#2ecc7188'; }
     else if (this.shrinkActive && !this.expandActive) { color = '#e74c3c'; shadow = '#e74c3c88'; }
     else if (this.expandActive && this.shrinkActive) { color = '#f1c40f'; shadow = '#f1c40f88'; }
+  if (this.stickyActive) { color = '#fbc531'; shadow = '#fbc53188'; }
     ctx.fillStyle = color;
     if (!lowGraphics) { ctx.shadowColor = shadow; ctx.shadowBlur = 12; }
     ctx.fillRect(this.x, this.y, this.width, this.height);
@@ -672,7 +674,20 @@
       }
       onPrimaryAction() {
         if (this.state === GameState.START) { this.state = GameState.PLAYING; for (const b of this.balls) if (!b.launched) { const angle = -Math.PI / 4; b.vx = Math.cos(angle) * b.speed; b.vy = Math.sin(angle) * b.speed; b.launched = true; } }
-        else if (this.state === GameState.PLAYING) { for (const b of this.balls) if (!b.launched) { const angle = -Math.PI / 4; b.vx = Math.cos(angle) * b.speed; b.vy = Math.sin(angle) * b.speed; b.launched = true; } }
+        else if (this.state === GameState.PLAYING) {
+          // Launch any resting balls. If sticky is active, aim based on current paddle offset for better control
+          const stickyActive = this.effectTimers.sticky > 0;
+          for (const b of this.balls) if (!b.launched) {
+            let angle = -Math.PI / 4;
+            if (stickyActive) {
+              const paddleCenter = this.paddle.x + this.paddle.width / 2;
+              let t = (b.x - paddleCenter) / (this.paddle.width / 2); t = Math.max(-1, Math.min(1, t));
+              const maxBounce = (60 * Math.PI) / 180; angle = t * maxBounce - Math.PI / 2; // aim upward with spread
+            }
+            b.vx = Math.cos(angle) * b.speed; b.vy = Math.sin(angle) * b.speed; b.launched = true;
+          }
+          if (stickyActive && STICKY_SINGLE_USE) this.effectTimers.sticky = 0;
+        }
         else if (this.state === GameState.LEVEL_CLEARED) { this.level += 1; this.normalBallSpeed = Math.min(MAX_BALL_SPEED, Math.round(this.normalBallSpeed * 1.1)); this.bricks.init(this.level); this.balls = [new Ball()]; this.ball = this.balls[0]; this.ball.speed = this.normalBallSpeed; this.ball.resetOnPaddle(this.paddle); this.state = GameState.PLAYING; }
         else if (this.state === GameState.GAME_OVER) { this.score = 0; this.lives = MAX_LIVES; this.level = 1; this.normalBallSpeed = BASE_BALL_SPEED; this.bricks.init(this.level); this.balls = [new Ball()]; this.ball = this.balls[0]; this.ball.speed = this.normalBallSpeed; this.ball.resetOnPaddle(this.paddle); this.state = GameState.START; }
       }
@@ -707,6 +722,7 @@
           // Visual flags for paddle rendering
           this.paddle.expandActive = this.effectTimers.expand > 0;
           this.paddle.shrinkActive = this.effectTimers.shrink > 0;
+          this.paddle.stickyActive = this.effectTimers.sticky > 0;
           // Apply ball slow effect
           let speedScale = 1;
           if (this.effectTimers.slow > 0) speedScale *= 0.7;
