@@ -233,17 +233,17 @@
         }
         ctx.fillText(`High: ${highScore}`, 10, 34);
         // Center: Lives shown as filled hearts (slightly lower to make room for title)
-        const hearts = Math.max(0, Math.min(3, lives|0));
-        if (hearts > 0) {
-          const size = 14; // heart bounding size in px
-          const spacing = 8;
-          const totalW = hearts * size + (hearts - 1) * spacing;
-          let startX = Math.round(WIDTH / 2 - totalW / 2);
-          const y = 26;
-          for (let i = 0; i < hearts; i++) {
-            this.drawHeart(startX, y, size, HEART_COLOR);
-            startX += size + spacing;
-          }
+        const totalSlots = 3;
+        const clampedLives = Math.max(0, Math.min(totalSlots, lives|0));
+        const size = 14; // heart bounding size in px
+        const spacing = 8;
+        const totalW = totalSlots * size + (totalSlots - 1) * spacing;
+        let startX = Math.round(WIDTH / 2 - totalW / 2);
+        const y = 26;
+        for (let i = 0; i < totalSlots; i++) {
+          if (i < clampedLives) this.drawHeart(startX, y, size, HEART_COLOR);
+          else this.drawHeartOutline(startX, y, size, HEART_COLOR);
+          startX += size + spacing;
         }
         // Right: Level
         ctx.textAlign = 'right'; ctx.fillText(`Level: ${level}`, WIDTH - 10, 10);
@@ -276,6 +276,31 @@
                           x + w / 2, y + h);
         ctx.closePath();
         ctx.fill();
+        ctx.restore();
+      }
+      drawHeartOutline(x, y, size, color = HEART_COLOR) {
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(1, Math.round(size * 0.12));
+        ctx.beginPath();
+        const w = size, h = size;
+        const topCurveHeight = h * 0.3;
+        ctx.moveTo(x + w / 2, y + h);
+        ctx.bezierCurveTo(x + w / 2 - w * 0.25, y + h - h * 0.1,
+                          x, y + h * 0.6,
+                          x, y + topCurveHeight);
+        ctx.bezierCurveTo(x, y,
+                          x + w * 0.25, y,
+                          x + w * 0.25, y + topCurveHeight);
+        ctx.bezierCurveTo(x + w * 0.25, y,
+                          x + w * 0.75, y,
+                          x + w * 0.75, y + topCurveHeight);
+        ctx.bezierCurveTo(x + w * 0.75, y + h * 0.6,
+                          x + w / 2 + w * 0.25, y + h - h * 0.1,
+                          x + w / 2, y + h);
+        ctx.closePath();
+        ctx.stroke();
         ctx.restore();
       }
       drawFPS() { const ctx = this.ctx; ctx.save(); ctx.font = '16px monospace'; ctx.fillStyle = '#0f0'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left'; ctx.fillText(`FPS: ${this.fps}`, 10, HEIGHT - 10); ctx.restore(); }
