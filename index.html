@@ -79,12 +79,13 @@
 
     // Particles module
     class Particles {
-      constructor(max = 450) { this.particles = []; this.MAX = max; }
+      constructor(max = 450) { this.particles = []; this.MAX = max; this.enabled = true; }
       spawnBrickParticles(x, y, color) {
-        const count = 14 + Math.floor(Math.random() * 8);
+        if (!this.enabled) return;
+        const count = this.MAX < 200 ? 6 + Math.floor(Math.random() * 4) : 14 + Math.floor(Math.random() * 8);
         for (let i = 0; i < count; i++) {
           const angle = Math.random() * Math.PI * 2;
-          const speed = 120 + Math.random() * 180;
+          const speed = (this.MAX < 200 ? 90 : 120) + Math.random() * (this.MAX < 200 ? 120 : 180);
           this.particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0, maxLife: 0.5 + Math.random() * 0.5, size: 2 + Math.random() * 2, color });
         }
         if (this.particles.length > this.MAX) this.particles.splice(0, this.particles.length - this.MAX);
@@ -124,7 +125,7 @@
       update(leftPressed, rightPressed) {
         this.dx = 0; if (leftPressed) this.dx -= this.speed; if (rightPressed) this.dx += this.speed; this.x += this.dx; this.clamp();
       }
-      draw(ctx) { ctx.save(); ctx.fillStyle = '#09f'; ctx.shadowColor = '#00f8'; ctx.shadowBlur = 12; ctx.fillRect(this.x, this.y, this.width, this.height); ctx.restore(); }
+  draw(ctx, lowGraphics) { ctx.save(); ctx.fillStyle = '#09f'; if (!lowGraphics) { ctx.shadowColor = '#00f8'; ctx.shadowBlur = 12; } ctx.fillRect(this.x, this.y, this.width, this.height); ctx.restore(); }
     }
 
     // Ball entity
@@ -150,7 +151,7 @@
         // Bottom -> life lost
         if (this.y - this.radius > HEIGHT) { onLifeLost(); }
       }
-      draw(ctx) { ctx.save(); ctx.fillStyle = '#ffcc00'; ctx.shadowColor = '#ffc80080'; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  draw(ctx, lowGraphics) { ctx.save(); ctx.fillStyle = '#ffcc00'; if (!lowGraphics) { ctx.shadowColor = '#ffc80080'; ctx.shadowBlur = 10; } ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
     }
 
     // Brick field module
@@ -202,6 +203,7 @@
         this.ctx = ctx;
         this.shake = { time: 0, duration: 0, magnitude: 0 };
         this.fps = 0;
+  this.lowGraphics = false;
         // Heart pop animation state
         this.heartPop = { slot: -1, time: 0, duration: 0.35 };
         this._lastHudUpdate = performance.now();
@@ -243,8 +245,7 @@
         if (gameState !== GameState.START) {
           ctx.textAlign = 'center'; ctx.font = '16px monospace';
           ctx.save();
-          ctx.shadowColor = '#ffffff88';
-          ctx.shadowBlur = 8;
+          if (!this.lowGraphics) { ctx.shadowColor = '#ffffff88'; ctx.shadowBlur = 8; }
           ctx.fillStyle = '#fff';
           ctx.fillText('Breakout', WIDTH / 2, 6);
           ctx.restore();
@@ -352,7 +353,7 @@
         ctx.stroke();
         ctx.restore();
       }
-      drawFPS() { const ctx = this.ctx; ctx.save(); ctx.font = '16px monospace'; ctx.fillStyle = '#0f0'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left'; ctx.fillText(`FPS: ${this.fps}`, 10, HEIGHT - 10); ctx.restore(); }
+  drawFPS() { const ctx = this.ctx; ctx.save(); ctx.font = '16px monospace'; ctx.fillStyle = '#0f0'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left'; ctx.fillText(`FPS: ${this.fps}${this.lowGraphics ? ' (Low)' : ''}`, 10, HEIGHT - 10); ctx.restore(); }
 
       // Draw a heart icon image, with optional scale/alpha animated around center
       drawHeartImage(x, y, size, img, opts = undefined) {
@@ -446,6 +447,7 @@
           else if (e.code === 'KeyM') { this.onToggleMute(); }
           if (e.code === 'KeyP') this.onTogglePause();
           if (e.code === 'Space') { e.preventDefault(); this.onPrimaryAction(); }
+          if (e.code === 'KeyL') { const g = window.__gameInstance; if (g) { g.renderer.lowGraphics = !g.renderer.lowGraphics; g.particles.MAX = g.renderer.lowGraphics ? 150 : 450; g.particles.enabled = true; } }
         });
         document.addEventListener('keyup', (e) => {
           if (e.code === 'ArrowLeft') this.leftPressed = false;
@@ -571,10 +573,10 @@
     draw(now, dt) {
         this.renderer.drawBackground();
         this.renderer.beginWorld(now, this.lastTick);
-        this.bricks.draw(this.ctx);
-        this.particles.draw(this.ctx);
-        this.paddle.draw(this.ctx);
-        this.ball.draw(this.ctx);
+  this.bricks.draw(this.ctx);
+  this.particles.draw(this.ctx);
+  this.paddle.draw(this.ctx, this.renderer.lowGraphics);
+  this.ball.draw(this.ctx, this.renderer.lowGraphics);
         this.renderer.endWorld();
         // Compute a flashing alpha [0..1] for the high score effect
         const flashAlpha = this.highScoreFlash > 0 ? 0.5 + 0.5 * Math.sin((2 * Math.PI) * (performance.now() / 200)) : 0;
@@ -585,7 +587,12 @@
       // Loop
       loop(now) {
         // FPS calc
-        this.frames++; if (now - this.lastFpsUpdate > 1000) { this.renderer.fps = Math.round((this.frames * 1000) / (now - this.lastFpsUpdate)); this.frames = 0; this.lastFpsUpdate = now; }
+        this.frames++; if (now - this.lastFpsUpdate > 1000) {
+          this.renderer.fps = Math.round((this.frames * 1000) / (now - this.lastFpsUpdate));
+          // Auto low-graphics if sustained low FPS
+          if (this.renderer.fps < 45) { this.renderer.lowGraphics = true; this.particles.MAX = 150; this.particles.enabled = true; }
+          this.frames = 0; this.lastFpsUpdate = now;
+        }
   const dt = Math.min(0.05, Math.max(0.001, (now - this.lastTick) / 1000)); this.lastTick = now;
         this.ctx.clearRect(0, 0, WIDTH, HEIGHT);
   this.update(dt); this.draw(now, dt);
@@ -594,7 +601,7 @@
     }
 
     // Boot
-    new Game(canvas);
+  window.__gameInstance = new Game(canvas);
   </script>
 </body>
 </html>
