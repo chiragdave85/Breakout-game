@@ -264,7 +264,8 @@
         this.h = this.height;
         this.type = type;
         this.color = POWERUP_COLORS[type] || '#fff';
-        this.vy = 140;
+  // Slightly faster fall so they're easy to catch
+  this.vy = 160;
         this.alive = true;
         // Step 1 fields (not yet used for activation here)
         this.active = false;
@@ -275,38 +276,78 @@
         const h = this.h ?? this.height;
         if (this.y - h > HEIGHT + 30) this.alive = false;
       }
-      draw(ctx, lowGraphics = false) {
+      draw(ctx, lowGraphics = false, renderer = null) {
         ctx.save();
-        if (!lowGraphics) { ctx.shadowColor = this.color + '88'; ctx.shadowBlur = 8; }
-        // rounded rect
-        const r = 5; const x = this.x, y = this.y; const w = this.w ?? this.width; const h = this.h ?? this.height;
-        ctx.fillStyle = this.color; ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.closePath(); ctx.fill();
-        // icon letter
-        ctx.fillStyle = '#111';
-        ctx.font = 'bold 14px monospace';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const x = this.x, y = this.y; const w = this.w ?? this.width; const h = this.h ?? this.height; const r = 5;
+        // Pulsing halo for visibility
+        const t = performance.now();
+        const pulse = 0.5 + 0.5 * Math.sin(t / 300);
+        const scale = 1 + 0.08 * pulse;
         const cx = x + w / 2, cy = y + h / 2;
-        let letter = '?';
-        switch (this.type) {
-          case POWERUP_TYPES.EXTRA_LIFE: letter = '+'; break;
-          case POWERUP_TYPES.MULTI_BALL: letter = 'M'; break;
-          case POWERUP_TYPES.PADDLE_EXPAND: letter = 'E'; break;
-          case POWERUP_TYPES.PADDLE_SHRINK: letter = 'S'; break;
-          case POWERUP_TYPES.SLOW_BALL: letter = 'C'; break; // clock
-          case POWERUP_TYPES.FAST_BALL: letter = 'F'; break;
-          case POWERUP_TYPES.STICKY: letter = 'G'; break; // glue
+        // Halo: circular for heart icon, rounded-rect for others
+        if (!lowGraphics) {
+          ctx.save();
+          ctx.globalAlpha = 0.25 + 0.25 * pulse;
+          ctx.fillStyle = this.color;
+          if (this.type === POWERUP_TYPES.EXTRA_LIFE && renderer && renderer.icons?.ready) {
+            ctx.beginPath();
+            const rad = Math.max(w, h) * 0.6 * scale;
+            ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy);
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath(); ctx.fill();
+          }
+          ctx.restore();
         }
-        ctx.fillText(letter, cx, cy + 1);
+        const icx = x + w / 2, icy = y + h / 2;
+        const showHeartIcon = (this.type === POWERUP_TYPES.EXTRA_LIFE && renderer && renderer.icons?.ready);
+        // Main body with subtle glow: skip the rectangle when showing heart icon
+        if (!showHeartIcon) {
+          if (!lowGraphics) { ctx.shadowColor = this.color + '88'; ctx.shadowBlur = 8; }
+          ctx.fillStyle = this.color; ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.lineTo(x + w - r, y);
+          ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+          ctx.lineTo(x + w, y + h - r);
+          ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          ctx.lineTo(x + r, y + h);
+          ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+          ctx.lineTo(x, y + r);
+          ctx.quadraticCurveTo(x, y, x + r, y);
+          ctx.closePath(); ctx.fill();
+        }
+        // Icon: heart image for Extra Life, else letter
+        if (showHeartIcon) {
+          const pad = 1; // minimal padding
+          const iw = Math.max(0, w - pad * 2);
+          const ih = Math.max(0, h - pad * 2);
+          ctx.drawImage(renderer.icons.filled, Math.round(x + pad), Math.round(y + pad), Math.round(iw), Math.round(ih));
+        } else {
+          ctx.fillStyle = '#111'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          let letter = '?';
+          switch (this.type) {
+            case POWERUP_TYPES.EXTRA_LIFE: letter = '+'; break;
+            case POWERUP_TYPES.MULTI_BALL: letter = 'M'; break;
+            case POWERUP_TYPES.PADDLE_EXPAND: letter = 'E'; break;
+            case POWERUP_TYPES.PADDLE_SHRINK: letter = 'S'; break;
+            case POWERUP_TYPES.SLOW_BALL: letter = 'C'; break;
+            case POWERUP_TYPES.FAST_BALL: letter = 'F'; break;
+            case POWERUP_TYPES.STICKY: letter = 'G'; break;
+          }
+          ctx.fillText(letter, icx, icy + 1);
+        }
         ctx.restore();
       }
     }
@@ -845,7 +886,7 @@
   this.particles.draw(this.ctx);
   // Power-ups (falling items)
   if (this.powerUps && this.powerUps.length) {
-    for (const pu of this.powerUps) pu.draw(this.ctx, this.renderer.lowGraphics);
+    for (const pu of this.powerUps) pu.draw(this.ctx, this.renderer.lowGraphics, this.renderer);
   }
   this.paddle.draw(this.ctx, this.renderer.lowGraphics);
   for (const b of this.balls) b.draw(this.ctx, this.renderer.lowGraphics, { fast: this.effectTimers.fast > 0, slow: this.effectTimers.slow > 0 });
