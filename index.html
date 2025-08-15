@@ -232,7 +232,7 @@
         const ctx = this.ctx; ctx.save(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const cx = WIDTH / 2; const cy = HEIGHT / 2;
         if (gameState === GameState.START) {
           ctx.font = '28px monospace'; ctx.fillText('Press Space to Start', cx, cy);
-          ctx.font = '16px monospace'; ctx.fillText('Controls: Arrow keys or Mouse/Touch | P: Pause | M: Mute', cx, cy + 30);
+          ctx.font = '16px monospace'; ctx.fillText('Controls: Arrow keys or Mouse/Touch | P: Pause | M: Mute | Shift+M: Reset High', cx, cy + 30);
         }
         else if (gameState === GameState.LEVEL_CLEARED) { ctx.font = '32px monospace'; ctx.fillText('Level Cleared!', cx, cy - 20); ctx.font = '24px monospace'; ctx.fillText('Press Space for Next Level', cx, cy + 20); }
         else if (gameState === GameState.GAME_OVER) { ctx.font = '32px monospace'; ctx.fillText('Game Over!', cx, cy - 20); ctx.font = '24px monospace'; ctx.fillText('Press Space to Restart', cx, cy + 20); }
@@ -243,9 +243,9 @@
 
     // Input module
     class Input {
-      constructor(canvas, { isPaused, toGameX, onPrimaryAction, onTapAction, onTogglePause, onToggleMute, onPaddleMove, onPointerInteract }) {
+      constructor(canvas, { isPaused, toGameX, onPrimaryAction, onTapAction, onTogglePause, onToggleMute, onResetHighScore, onPaddleMove, onPointerInteract }) {
         this.leftPressed = false; this.rightPressed = false; this.isPaused = isPaused; this.toGameX = toGameX;
-        this.onPrimaryAction = onPrimaryAction; this.onTapAction = onTapAction; this.onTogglePause = onTogglePause; this.onToggleMute = onToggleMute; this.onPaddleMove = onPaddleMove; this.onPointerInteract = onPointerInteract;
+        this.onPrimaryAction = onPrimaryAction; this.onTapAction = onTapAction; this.onTogglePause = onTogglePause; this.onToggleMute = onToggleMute; this.onResetHighScore = onResetHighScore; this.onPaddleMove = onPaddleMove; this.onPointerInteract = onPointerInteract;
         this.TAP_MOVE_THRESHOLD = 10; this.touchStartX = 0; this.touchMoved = false; this.attach(canvas);
       }
       attach(canvas) {
@@ -253,7 +253,8 @@
           this.onPointerInteract();
           if (e.code === 'ArrowLeft') this.leftPressed = true;
           if (e.code === 'ArrowRight') this.rightPressed = true;
-          if (e.code === 'KeyM') this.onToggleMute();
+          if (e.code === 'KeyM' && e.shiftKey) { this.onResetHighScore(); }
+          else if (e.code === 'KeyM') { this.onToggleMute(); }
           if (e.code === 'KeyP') this.onTogglePause();
           if (e.code === 'Space') { e.preventDefault(); this.onPrimaryAction(); }
         });
@@ -295,6 +296,7 @@
           onTapAction: () => this.onTapAction(),
           onTogglePause: () => { if (this.state === GameState.PLAYING) this.paused = !this.paused; },
           onToggleMute: () => this.audio.toggleMute(),
+          onResetHighScore: () => this.onResetHighScore(),
           onPaddleMove: (x) => this.onPaddleMove(x),
           onPointerInteract: () => this.audio.ensure(),
         });
@@ -326,6 +328,9 @@
         if (this.state === GameState.START) { this.state = GameState.PLAYING; if (!this.ball.launched) { const angle = -Math.PI / 4; this.ball.vx = Math.cos(angle) * this.ball.speed; this.ball.vy = Math.sin(angle) * this.ball.speed; this.ball.launched = true; } }
         else if (this.state === GameState.LEVEL_CLEARED) { this.level += 1; this.ball.speed = Math.min(MAX_BALL_SPEED, Math.round(this.ball.speed * 1.1)); this.bricks.init(this.level); this.ball.resetOnPaddle(this.paddle); this.state = GameState.PLAYING; }
         // In PLAYING, a tap does not launch; matches previous touch behavior.
+      }
+      onResetHighScore() {
+        if (confirm('Reset high score?')) { this.highScores.value = 0; this.highScores.save(); this.highScoreFlash = 0; }
       }
       // Update systems
       update(dt) {

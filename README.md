@@ -11,6 +11,7 @@ A simple Breakout game built step-by-step in a single `index.html` using HTML5 C
 - Keyboard: Arrow Left/Right to move paddle
 - Space: launch the ball
  - M: mute/unmute sounds
+ - Shift+M: reset high score (with confirmation)
 
 ## Steps
 
