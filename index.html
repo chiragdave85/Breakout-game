@@ -220,12 +220,12 @@
         this.icons.empty.onerror = (e) => { console.error('Failed to load heart-empty.png', e); };
         this.icons.filled.onerror = (e) => { console.error('Failed to load heart-filled.png', e); };
         try {
-          this.icons.empty.src = new URL('heart-empty.png', window.location.href).toString();
-          this.icons.filled.src = new URL('heart-filled.png', window.location.href).toString();
+          this.icons.filled.src = new URL('heart-filled.png', window.location.href).toString(); // full/remaining life
+          this.icons.empty.src = new URL('heart-empty.png', window.location.href).toString();   // lost life
         } catch(_) {
           // Fallback to relative if URL construction fails
-          this.icons.empty.src = 'heart-empty.png';
           this.icons.filled.src = 'heart-filled.png';
+          this.icons.empty.src = 'heart-empty.png';
         }
       }
       triggerShake(mag = 3, durationMs = 120) { this.shake.magnitude = mag; this.shake.duration = durationMs / 1000; this.shake.time = this.shake.duration; }
@@ -279,9 +279,9 @@
         const y = 26;
         for (let i = 0; i < totalSlots; i++) {
           const isFilled = i < clampedLives; // remaining lives (full)
-          // Base icon (per request: empty.png for full life, filled.png for lost)
+          // Base icon (now: filled.png for full life, empty.png for lost)
           if (this.icons.ready) {
-            const img = isFilled ? this.icons.empty : this.icons.filled;
+            const img = isFilled ? this.icons.filled : this.icons.empty;
             this.drawHeartImage(startX, y, size, img);
           } else {
             // Fallback to vector hearts while icons load
@@ -296,8 +296,8 @@
             const alpha = 1 - ease;
             const yOffset = -6 * ease;
             if (this.icons.ready) {
-              // Overlay uses the icon that just changed (lost life => now shows filled)
-              const img = this.icons.filled;
+              // Overlay uses the icon that just changed (lost life => now shows empty)
+              const img = this.icons.empty;
               this.drawHeartImage(startX, y + yOffset, size, img, { scale, alpha });
             } else {
               this.drawHeart(startX, y + yOffset, size, HEART_COLOR, { scale, alpha });
