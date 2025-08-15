@@ -415,19 +415,22 @@
           }
           startX += size + spacing;
         }
-        // "+1 Life" toast near hearts (center)
+        // Life gain toast near hearts (center)
         if (this.lifeGain.time > 0) {
           const k = 1 - (this.lifeGain.time / this.lifeGain.duration); // 0..1
           const ease = 1 - Math.pow(1 - k, 3);
-          const alpha = 1 - ease;
-          const yOffset = -10 * ease;
+          const alpha = 1 - ease; // fade out
+          const yOffset = -10 * ease; // float up
+          const scale = 1 + 0.4 * ease; // slight pop
+          const cx = WIDTH / 2;
+          const hx = Math.round(cx - size / 2);
+          const hy = Math.round(y + yOffset - 16);
           ctx.save();
-          ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-          ctx.textAlign = 'center';
-          ctx.font = 'bold 16px monospace';
-          ctx.fillStyle = '#4cd137';
-          if (!this.lowGraphics) { ctx.shadowColor = '#4cd13788'; ctx.shadowBlur = 8; }
-          ctx.fillText('+1 Life', WIDTH / 2, y + yOffset - 14);
+          if (this.icons.ready) {
+            this.drawHeartImage(hx, hy, size, this.icons.filled, { scale, alpha });
+          } else {
+            this.drawHeart(hx, hy, size, HEART_COLOR, { scale, alpha });
+          }
           ctx.restore();
         }
         // Right: Level
@@ -707,7 +710,7 @@
           // Apply ball slow effect
           let speedScale = 1;
           if (this.effectTimers.slow > 0) speedScale *= 0.7;
-          if (this.effectTimers.fast > 0) speedScale *= 4.0;
+          if (this.effectTimers.fast > 0) speedScale *= 2.0;
           const desiredSpeed = this.normalBallSpeed * speedScale;
           for (const b of this.balls) { if (Math.abs(b.speed - desiredSpeed) > 0.5) { b.speed = desiredSpeed; b.enforceSpeed(); } }
           this.paddle.update(this.input.leftPressed, this.input.rightPressed);
