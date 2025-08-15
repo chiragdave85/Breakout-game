@@ -568,7 +568,7 @@
   else { this.ball.resetOnPaddle(this.paddle); }
       }
       // Draw
-      draw(now) {
+    draw(now, dt) {
         this.renderer.drawBackground();
         this.renderer.beginWorld(now, this.lastTick);
         this.bricks.draw(this.ctx);
@@ -588,7 +588,7 @@
         this.frames++; if (now - this.lastFpsUpdate > 1000) { this.renderer.fps = Math.round((this.frames * 1000) / (now - this.lastFpsUpdate)); this.frames = 0; this.lastFpsUpdate = now; }
   const dt = Math.min(0.05, Math.max(0.001, (now - this.lastTick) / 1000)); this.lastTick = now;
         this.ctx.clearRect(0, 0, WIDTH, HEIGHT);
-        this.update(dt); this.draw(now);
+  this.update(dt); this.draw(now, dt);
         requestAnimationFrame((t) => this.loop(t));
       }
     }
