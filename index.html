@@ -29,6 +29,7 @@
     const ctx = canvas.getContext('2d');
     const WIDTH = 800;
     const HEIGHT = 600;
+    const MAX_LIVES = 3;
     const BASE_BALL_SPEED = 380;
     const MAX_BALL_SPEED = 900;
   const BRICK_COLS = 10;
@@ -294,6 +295,8 @@
   this.lowGraphics = false;
         // Heart pop animation state
         this.heartPop = { slot: -1, time: 0, duration: 0.35 };
+  // "+1 Life" toast animation
+  this.lifeGain = { time: 0, duration: 0.9 };
         this._lastHudUpdate = performance.now();
   // Lives icons
   this.icons = { empty: new Image(), filled: new Image(), ready: false, _loaded: 0 };
@@ -312,6 +315,7 @@
       }
       triggerShake(mag = 3, durationMs = 120) { this.shake.magnitude = mag; this.shake.duration = durationMs / 1000; this.shake.time = this.shake.duration; }
       triggerHeartPop(slot, durationMs = 350) { this.heartPop.slot = slot; this.heartPop.duration = durationMs / 1000; this.heartPop.time = this.heartPop.duration; }
+  triggerLifeGain(durationMs = 900) { this.lifeGain.duration = durationMs / 1000; this.lifeGain.time = this.lifeGain.duration; }
       beginWorld(now, lastTick) {
         const ctx = this.ctx; ctx.save();
         if (this.shake.time > 0) { const k = this.shake.time / this.shake.duration; const mag = this.shake.magnitude * k; const ox = (Math.random() * 2 - 1) * mag; const oy = (Math.random() * 2 - 1) * mag; ctx.translate(ox, oy);
@@ -326,7 +330,8 @@
           dt = Math.max(0.001, (now - this._lastHudUpdate) / 1000);
           this._lastHudUpdate = now;
         }
-        if (this.heartPop.time > 0) this.heartPop.time = Math.max(0, this.heartPop.time - dt);
+  if (this.heartPop.time > 0) this.heartPop.time = Math.max(0, this.heartPop.time - dt);
+  if (this.lifeGain.time > 0) this.lifeGain.time = Math.max(0, this.lifeGain.time - dt);
 
         const ctx = this.ctx; ctx.save(); ctx.textBaseline = 'top';
         // Optional small title during gameplay states (not on START)
@@ -352,7 +357,7 @@
         }
         ctx.fillText(`High: ${highScore}`, 10, 34);
         // Center: Lives shown as filled hearts (slightly lower to make room for title)
-        const totalSlots = 3;
+  const totalSlots = MAX_LIVES;
         const clampedLives = Math.max(0, Math.min(totalSlots, lives|0));
         const size = 14; // heart bounding size in px
         const spacing = 8;
@@ -386,6 +391,21 @@
             }
           }
           startX += size + spacing;
+        }
+        // "+1 Life" toast near hearts (center)
+        if (this.lifeGain.time > 0) {
+          const k = 1 - (this.lifeGain.time / this.lifeGain.duration); // 0..1
+          const ease = 1 - Math.pow(1 - k, 3);
+          const alpha = 1 - ease;
+          const yOffset = -10 * ease;
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+          ctx.textAlign = 'center';
+          ctx.font = 'bold 16px monospace';
+          ctx.fillStyle = '#4cd137';
+          if (!this.lowGraphics) { ctx.shadowColor = '#4cd13788'; ctx.shadowBlur = 8; }
+          ctx.fillText('+1 Life', WIDTH / 2, y + yOffset - 14);
+          ctx.restore();
         }
         // Right: Level
         ctx.textAlign = 'right'; ctx.fillText(`Level: ${level}`, WIDTH - 10, 10);
@@ -712,7 +732,9 @@
       activatePowerUp(type) {
         switch (type) {
           case POWERUP_TYPES.EXTRA_LIFE:
-            this.lives = Math.min(3, this.lives + 1);
+            const prev = this.lives;
+            this.lives = Math.min(MAX_LIVES, this.lives + 1);
+            if (this.lives > prev) this.renderer.triggerLifeGain();
             break;
           case POWERUP_TYPES.PADDLE_EXPAND:
             this.effectTimers.expand = Math.max(this.effectTimers.expand, 10);
