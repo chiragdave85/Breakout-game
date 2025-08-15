@@ -247,7 +247,17 @@
           ctx.font = '48px monospace'; ctx.fillStyle = '#fff';
           ctx.fillText('Breakout', cx, cy - 40);
           ctx.restore();
-          ctx.font = '28px monospace'; ctx.fillText('Press Space to Start', cx, cy);
+          // Pulsing subtitle
+          ctx.save();
+          const t = performance.now();
+          const pulse = 0.5 + 0.5 * Math.sin(t / 400); // ~2.5s cycle
+          ctx.globalAlpha = 0.6 + 0.4 * pulse; // 0.6..1.0 alpha
+          ctx.font = '28px monospace';
+          ctx.fillStyle = '#fff';
+          ctx.shadowColor = '#ffffff55';
+          ctx.shadowBlur = 10;
+          ctx.fillText('Press Space to Start', cx, cy);
+          ctx.restore();
           ctx.font = '16px monospace'; ctx.fillText('Controls: Arrow keys or Mouse/Touch | P: Pause | M: Mute | Shift+M: Reset High', cx, cy + 30);
         }
         else if (gameState === GameState.LEVEL_CLEARED) { ctx.font = '32px monospace'; ctx.fillText('Level Cleared!', cx, cy - 20); ctx.font = '24px monospace'; ctx.fillText('Press Space for Next Level', cx, cy + 20); }
