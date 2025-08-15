@@ -390,6 +390,11 @@
       drawOverlay(gameState, paused) {
         const ctx = this.ctx; ctx.save(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const cx = WIDTH / 2; const cy = HEIGHT / 2;
         if (gameState === GameState.START) {
+          // Dim the background to avoid distraction on START screen
+          ctx.save();
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(0, 0, WIDTH, HEIGHT);
+          ctx.restore();
           ctx.save();
           ctx.shadowColor = '#ffffffaa';
           ctx.shadowBlur = 24;
