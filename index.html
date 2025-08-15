@@ -198,8 +198,16 @@
 
     // Renderer module (HUD, overlays, FPS, screen shake and world grouping)
     class Renderer {
-      constructor(ctx) { this.ctx = ctx; this.shake = { time: 0, duration: 0, magnitude: 0 }; this.fps = 0; }
+      constructor(ctx) {
+        this.ctx = ctx;
+        this.shake = { time: 0, duration: 0, magnitude: 0 };
+        this.fps = 0;
+        // Heart pop animation state
+        this.heartPop = { slot: -1, time: 0, duration: 0.35 };
+        this._lastHudUpdate = performance.now();
+      }
       triggerShake(mag = 3, durationMs = 120) { this.shake.magnitude = mag; this.shake.duration = durationMs / 1000; this.shake.time = this.shake.duration; }
+      triggerHeartPop(slot, durationMs = 350) { this.heartPop.slot = slot; this.heartPop.duration = durationMs / 1000; this.heartPop.time = this.heartPop.duration; }
       beginWorld(now, lastTick) {
         const ctx = this.ctx; ctx.save();
         if (this.shake.time > 0) { const k = this.shake.time / this.shake.duration; const mag = this.shake.magnitude * k; const ox = (Math.random() * 2 - 1) * mag; const oy = (Math.random() * 2 - 1) * mag; ctx.translate(ox, oy);
@@ -207,7 +215,13 @@
       }
       endWorld() { this.ctx.restore(); }
       drawBackground() { const ctx = this.ctx; ctx.fillStyle = '#111'; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
-  drawHUD(score, lives, level, highScore, highFlashAlpha = 0, gameState = GameState.PLAYING) {
+      drawHUD(score, lives, level, highScore, highFlashAlpha = 0, gameState = GameState.PLAYING) {
+        // Update HUD-local animations
+        const now = performance.now();
+        const dt = Math.min(0.033, Math.max(0.001, (now - this._lastHudUpdate) / 1000));
+        this._lastHudUpdate = now;
+        if (this.heartPop.time > 0) this.heartPop.time = Math.max(0, this.heartPop.time - dt);
+
         const ctx = this.ctx; ctx.save(); ctx.textBaseline = 'top';
         // Optional small title during gameplay states (not on START)
         if (gameState !== GameState.START) {
@@ -241,8 +255,19 @@
         let startX = Math.round(WIDTH / 2 - totalW / 2);
         const y = 26;
         for (let i = 0; i < totalSlots; i++) {
-          if (i < clampedLives) this.drawHeart(startX, y, size, HEART_COLOR);
+          const isFilled = i < clampedLives;
+          // Base heart (filled or outline)
+          if (isFilled) this.drawHeart(startX, y, size, HEART_COLOR);
           else this.drawHeartOutline(startX, y, size, HEART_COLOR);
+          // Pop animation overlay for the just-lost heart slot
+          if (i === this.heartPop.slot && this.heartPop.time > 0) {
+            const k = 1 - (this.heartPop.time / this.heartPop.duration); // 0 -> 1
+            const ease = 1 - Math.pow(1 - k, 3); // easeOutCubic
+            const scale = 1 + 0.4 * ease;
+            const alpha = 1 - ease;
+            const yOffset = -6 * ease;
+            this.drawHeart(startX, y + yOffset, size, HEART_COLOR, { scale, alpha });
+          }
           startX += size + spacing;
         }
         // Right: Level
@@ -251,29 +276,37 @@
       }
 
       // Draw a filled heart with top-left at (x, y), roughly size x size box
-      drawHeart(x, y, size, color = HEART_COLOR) {
+      drawHeart(x, y, size, color = HEART_COLOR, opts = undefined) {
         const ctx = this.ctx;
         ctx.save();
+        const scale = opts?.scale || 1;
+        const alpha = opts?.alpha ?? 1;
+        // Translate to center for scaling
+        const cx = x + size / 2, cy = y + size / 2;
+        ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
+        ctx.translate(-size / 2, -size / 2);
+        ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
         ctx.fillStyle = color;
         ctx.beginPath();
         const w = size, h = size;
         const topCurveHeight = h * 0.3;
         // Start at bottom tip
-        ctx.moveTo(x + w / 2, y + h);
+        ctx.moveTo(0 + w / 2, 0 + h);
         // Left side
-        ctx.bezierCurveTo(x + w / 2 - w * 0.25, y + h - h * 0.1,
-                          x, y + h * 0.6,
-                          x, y + topCurveHeight);
-        ctx.bezierCurveTo(x, y,
-                          x + w * 0.25, y,
-                          x + w * 0.25, y + topCurveHeight);
+        ctx.bezierCurveTo(0 + w / 2 - w * 0.25, 0 + h - h * 0.1,
+                          0, 0 + h * 0.6,
+                          0, 0 + topCurveHeight);
+        ctx.bezierCurveTo(0, 0,
+                          0 + w * 0.25, 0,
+                          0 + w * 0.25, 0 + topCurveHeight);
         // Right side
-        ctx.bezierCurveTo(x + w * 0.25, y,
-                          x + w * 0.75, y,
-                          x + w * 0.75, y + topCurveHeight);
-        ctx.bezierCurveTo(x + w * 0.75, y + h * 0.6,
-                          x + w / 2 + w * 0.25, y + h - h * 0.1,
-                          x + w / 2, y + h);
+        ctx.bezierCurveTo(0 + w * 0.25, 0,
+                          0 + w * 0.75, 0,
+                          0 + w * 0.75, 0 + topCurveHeight);
+        ctx.bezierCurveTo(0 + w * 0.75, 0 + h * 0.6,
+                          0 + w / 2 + w * 0.25, 0 + h - h * 0.1,
+                          0 + w / 2, 0 + h);
         ctx.closePath();
         ctx.fill();
         ctx.restore();
@@ -471,7 +504,13 @@
         }
       }
       onLifeLost() {
-        this.lives -= 1; this.audio.playLifeLost(); if (this.lives <= 0) { this.ball.resetOnPaddle(this.paddle); this.state = GameState.GAME_OVER; } else { this.ball.resetOnPaddle(this.paddle); }
+  // Determine which heart slot changes from filled to outline (0-based left to right)
+  const slot = Math.max(0, Math.min(2, this.lives - 1));
+  this.lives -= 1;
+  this.renderer.triggerHeartPop(slot);
+  this.audio.playLifeLost();
+  if (this.lives <= 0) { this.ball.resetOnPaddle(this.paddle); this.state = GameState.GAME_OVER; }
+  else { this.ball.resetOnPaddle(this.paddle); }
       }
       // Draw
       draw(now) {
